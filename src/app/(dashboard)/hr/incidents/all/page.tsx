@@ -5,6 +5,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/hr/api'
 import { useAuth } from '@/contexts/hr/AuthContext'
 import { formatDate, formatCurrency, cn } from '@/lib/hr/utils'
+import Link from 'next/link'
+import { Plus } from 'lucide-react'
 import { PageHeader } from '@/components/hr/shared/PageHeader'
 import { ExportButton } from '@/components/hr/shared/ExportButton'
 import { Button } from '@/components/hr/ui/button'
@@ -189,11 +191,20 @@ export default function AllIncidentsPage() {
         description="View and manage all disciplinary incidents"
         breadcrumbs={[{ label: 'Incidents' }, { label: 'All Incidents' }]}
         actions={
-          <ExportButton
-            onExportExcel={handleExportExcel}
-            filename="incidents-report"
-            label="Export Excel"
-          />
+          <div className="flex items-center gap-2">
+            <Link
+              href="/hr/incidents/submit"
+              className="inline-flex items-center gap-1.5 rounded-md bg-primary text-primary-foreground px-3 h-9 text-sm font-medium hover:opacity-90"
+            >
+              <Plus className="h-4 w-4" />
+              Add incident
+            </Link>
+            <ExportButton
+              onExportExcel={handleExportExcel}
+              filename="incidents-report"
+              label="Export Excel"
+            />
+          </div>
         }
       />
 

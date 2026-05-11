@@ -262,7 +262,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           // HR data
           if (dbUser.hrProfile) {
             token.hrProfileId = dbUser.hrProfile.id;
-            token.hrRoles = dbUser.hrProfile.roles.map((r) => r.role.name);
+            const explicitRoles = dbUser.hrProfile.roles.map((r) => r.role.name);
+            // Org-chart-derived team-lead: anyone with subordinates is a team
+            // lead. We inject the "team_lead" role into the session so existing
+            // permission checks (`roles.includes("team_lead")`) keep working
+            // without each call site needing to be rewritten.
+            const empWithReports = await db.hrEmployee.findFirst({
+              where: { userId: dbUser.id },
+              select: {
+                id: true,
+                subordinates: { take: 1, select: { id: true } },
+              },
+            });
+            const derivedLead =
+              !!empWithReports?.subordinates?.length && !explicitRoles.includes("team_lead");
+            token.hrRoles = derivedLead
+              ? [...explicitRoles, "team_lead"]
+              : explicitRoles;
             token.hrCompanies = dbUser.hrProfile.companies.map(
               (c) => c.companyId
             );

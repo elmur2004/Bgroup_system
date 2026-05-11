@@ -84,7 +84,7 @@
 }
 
 :root {
-  /* Warmer neutral — hue 255 keeps a subtle violet-leaning grey */
+  /* Standard light theme: light page, white cards, dark text. */
   --background: oklch(0.985 0.005 280);
   --foreground: oklch(0.17 0.018 255);
   --card: oklch(1 0 0);
@@ -158,6 +158,7 @@
 }
 
 .dark {
+  /* Standard dark theme: dark page, slightly-lighter dark cards, light text. */
   --background: oklch(0.13 0.018 275);
   --foreground: oklch(0.97 0.005 255);
   --card: oklch(0.18 0.022 275);
@@ -202,8 +203,8 @@
   --info: oklch(0.72 0.17 225);
   --info-foreground: oklch(0.12 0.03 225);
 
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
+  --border: oklch(1 0 0 / 0.10);
+  --input: oklch(1 0 0 / 0.15);
   --ring: oklch(0.7 0.2 264);
 
   --chart-1: oklch(0.7 0.2 264);
@@ -222,6 +223,12 @@
   --sidebar-accent-foreground: oklch(0.92 0.05 290);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.7 0.2 264);
+
+  /* Dark-mode card shadow: colored (indigo) glow that gives cards depth on
+     the dark background — matches the reference dashboards. */
+  --shadow-card: 0 0 0 1px oklch(1 0 0 / 0.04), 0 8px 24px oklch(0.5 0.24 270 / 0.18);
+  --shadow-card-hover: 0 0 0 1px oklch(0.7 0.2 270 / 0.25), 0 12px 36px oklch(0.5 0.24 270 / 0.32);
+  --shadow-glow: 0 0 0 1px oklch(0.7 0.2 270 / 0.35), 0 10px 30px oklch(0.5 0.24 270 / 0.4);
 }
 
 @layer base {

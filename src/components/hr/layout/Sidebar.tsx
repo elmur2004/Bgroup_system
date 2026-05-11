@@ -135,7 +135,7 @@ const teamLeadNavItems: NavItem[] = [
   { label: 'My Team', href: '/team/members', icon: <Users className="h-4 w-4" /> },
   { label: 'Team Attendance', href: '/team/attendance', icon: <Clock className="h-4 w-4" /> },
   { label: 'Overtime Approvals', href: '/overtime/pending', icon: <CheckSquare className="h-4 w-4" /> },
-  { label: 'Submit Incident', href: '/incidents/new', icon: <AlertTriangle className="h-4 w-4" /> },
+  { label: 'Submit Incident', href: '/hr/incidents/submit', icon: <AlertTriangle className="h-4 w-4" /> },
 ]
 
 const accountantNavItems: NavItem[] = [

@@ -159,51 +159,23 @@ function getCrmNav(crmRole?: string): NavSection[] {
   const isManager = crmRole === "MANAGER" || crmRole === "CEO" || crmRole === "ADMIN";
 
   sections.push({
-    title: "My Work",
+    title: "Work",
     items: [
-      { href: "/crm/my", label: "Dashboard", icon: LayoutDashboard },
-      { href: "/crm/my/calls", label: "My Calls", icon: Phone },
-      { href: "/tasks", label: "My Tasks", icon: ListTodo },
-      { href: "/tasks/calendar", label: "Tasks calendar", icon: CalendarCheck },
-    ],
-  });
-
-  sections.push({
-    title: "CRM",
-    items: [
-      { href: "/crm/sales-board", label: "Sales board", icon: BarChart3 },
+      { href: "/crm/sales-board", label: "Dashboard", icon: BarChart3 },
+      { href: "/crm/pipeline", label: "Pipeline", icon: TrendingUp },
       { href: "/crm/opportunities", label: "Opportunities", icon: TrendingUp },
       { href: "/crm/companies", label: "Companies", icon: Building2 },
       { href: "/crm/contacts", label: "Contacts", icon: Contact },
-      { href: "/crm/meetings", label: "Meetings", icon: CalendarCheck },
-      { href: "/crm/meetings/calendar", label: "Weekly calendar", icon: CalendarCheck },
-      ...(isManager ? [{ href: "/crm/calls", label: "All Calls", icon: Phone }] : []),
-      { href: "/crm/products", label: "Products", icon: Package },
+      { href: "/crm/meetings", label: "Meetings & calendar", icon: CalendarCheck },
+      { href: "/crm/reports", label: "Daily reports", icon: ClipboardList },
     ],
   });
-
-  if (isManager) {
-    sections.push({
-      title: "Group",
-      items: [
-        { href: "/crm/group", label: "Dashboard", icon: BarChart3 },
-        { href: "/crm/group/leaderboard", label: "Leaderboard", icon: Trophy },
-        { href: "/crm/group/forecast", label: "Forecast", icon: TrendingUp },
-        { href: "/crm/group/health", label: "Health", icon: HeartPulse },
-      ],
-    });
-  }
 
   if (crmRole === "CEO" || crmRole === "ADMIN") {
     sections.push({
       title: "Admin",
       items: [
-        { href: "/crm/admin/users", label: "Users", icon: UserCog },
-        { href: "/crm/admin/entities", label: "Entities", icon: Landmark },
-        { href: "/crm/admin/fx-rates", label: "FX Rates", icon: DollarSign },
-        { href: "/crm/admin/stage-config", label: "Stages", icon: Layers },
-        { href: "/crm/admin/loss-reasons", label: "Loss Reasons", icon: AlertCircle },
-        { href: "/crm/admin/lead-sources", label: "Lead Sources", icon: Tag },
+        { href: "/crm/admin/settings", label: "Settings", icon: Settings },
       ],
     });
   }
@@ -254,6 +226,45 @@ function getPartnersNav(isAdmin: boolean): NavSection[] {
   ];
 }
 
+// ─── Admin Navigation ─────────────────────────────────────────────
+
+function getAdminNav(): NavSection[] {
+  return [
+    {
+      items: [
+        { href: "/admin", label: "Admin home", icon: LayoutDashboard },
+        { href: "/admin/board", label: "Group board", icon: BarChart3 },
+      ],
+    },
+    {
+      title: "People",
+      items: [
+        { href: "/admin/users", label: "All users", icon: Users },
+        { href: "/admin/partners", label: "Partners", icon: Handshake },
+        { href: "/hr/employees", label: "Employees", icon: Users },
+        { href: "/hr/org-chart", label: "Org chart", icon: Users },
+      ],
+    },
+    {
+      title: "Dashboards",
+      items: [
+        { href: "/hr/dashboard", label: "HR dashboard", icon: LayoutDashboard },
+        { href: "/crm/sales-board", label: "CRM dashboard", icon: TrendingUp },
+        { href: "/partners/dashboard", label: "Partners dashboard", icon: Handshake },
+      ],
+    },
+    {
+      title: "Catalogue & settings",
+      items: [
+        { href: "/admin/settings", label: "All settings", icon: Settings },
+        { href: "/crm/products", label: "Products & services", icon: Package },
+        { href: "/admin/onboarding-templates", label: "Onboarding templates", icon: ClipboardList },
+        { href: "/admin/workflows-sequential", label: "Workflows", icon: Layers },
+      ],
+    },
+  ];
+}
+
 // ─── Main Sidebar Component ────────────────────────────────────────
 
 export function Sidebar() {
@@ -265,13 +276,15 @@ export function Sidebar() {
 
   // Detect active module from pathname.
   let detected: "hr" | "crm" | "partners" | null = null;
-  if (pathname.startsWith("/hr")) detected = "hr";
-  else if (pathname.startsWith("/crm")) detected = "crm";
-  else if (pathname.startsWith("/partners")) detected = "partners";
+  let detectedExt: "hr" | "crm" | "partners" | "admin" | null = null;
+  if (pathname.startsWith("/hr")) detectedExt = "hr";
+  else if (pathname.startsWith("/crm")) detectedExt = "crm";
+  else if (pathname.startsWith("/partners")) detectedExt = "partners";
+  else if (pathname.startsWith("/admin")) detectedExt = "admin";
+  detected = detectedExt === "admin" ? null : (detectedExt as "hr" | "crm" | "partners" | null);
 
   // Persist the last module the user was inside so cross-module pages
-  // (/tasks, /admin/*, /today, /account/*) keep the previous module's nav
-  // instead of going blank. Falls back to the first available module, then HR.
+  // (/tasks, /today, /account/*) keep the previous module's nav.
   const [lastModule, setLastModule] = useState<"hr" | "crm" | "partners">(() => {
     if (typeof window !== "undefined") {
       const stored = window.localStorage.getItem("bgroup.activeModule");
@@ -289,12 +302,15 @@ export function Sidebar() {
     }
   }, [detected, lastModule]);
 
-  const activeModule: "hr" | "crm" | "partners" =
-    detected ?? (modules.includes(lastModule) ? lastModule : (modules[0] as "hr" | "crm" | "partners" | undefined) ?? "hr");
+  const activeModule: "hr" | "crm" | "partners" | "admin" =
+    detectedExt ??
+    (modules.includes(lastModule) ? lastModule : (modules[0] as "hr" | "crm" | "partners" | undefined) ?? "hr");
 
   // Get nav sections for active module.
   let sections: NavSection[] = [];
-  if (activeModule === "hr") {
+  if (activeModule === "admin") {
+    sections = getAdminNav();
+  } else if (activeModule === "hr") {
     const hrRoles = session?.user?.hrRoles || [];
     sections = getHrNav(hrRoles);
   } else if (activeModule === "crm") {
@@ -305,11 +321,20 @@ export function Sidebar() {
   }
 
   function isActive(href: string) {
+    // Module-root "home" links (the dashboards we use as each module's
+    // landing page) must light up ONLY on the exact path — otherwise they
+    // would stay active on every child route in the module, double-lighting
+    // alongside the actual page entry.
+    const rootOnly = new Set([
+      "/admin",
+      "/hr/dashboard",
+      "/crm/my",
+      "/partners/dashboard",
+    ]);
+    if (rootOnly.has(href)) return pathname === href;
+    // For every other link, boundary-aware match: exact path OR sub-segment.
     if (href === pathname) return true;
-    // Don't match base module routes as prefix
-    const basePaths = ["/hr/dashboard", "/crm/my", "/partners/dashboard"];
-    if (basePaths.includes(href)) return pathname === href;
-    return pathname.startsWith(href);
+    return pathname.startsWith(href + "/");
   }
 
   const CollapseIcon = collapsed ? ChevronRight : ChevronLeft;

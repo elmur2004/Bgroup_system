@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,8 +8,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Calendar as CalendarIcon, AlertTriangle, CheckCircle2, Clock } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Plus, AlertTriangle, CheckCircle2, Clock } from "lucide-react";
 import { toast } from "sonner";
+import { WeeklyCalendarClient } from "./calendar/client";
 
 type Meeting = {
   id: string;
@@ -103,60 +104,68 @@ export function MeetingsClient() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <Link href="/crm/meetings/calendar" className="text-sm text-primary hover:underline inline-flex items-center gap-1.5">
-          <CalendarIcon className="h-4 w-4" />
-          Open weekly calendar
-        </Link>
-        <Button size="sm" onClick={() => setBookOpen(true)}>
-          <Plus className="h-4 w-4 me-1.5" />
-          Book meeting
-        </Button>
-      </div>
+      <Tabs defaultValue="calendar" className="space-y-3">
+        <div className="flex items-center justify-between">
+          <TabsList>
+            <TabsTrigger value="calendar">Weekly calendar</TabsTrigger>
+            <TabsTrigger value="list">List ({upcoming.length} upcoming)</TabsTrigger>
+          </TabsList>
+          <Button size="sm" onClick={() => setBookOpen(true)}>
+            <Plus className="h-4 w-4 me-1.5" />
+            Book meeting
+          </Button>
+        </div>
 
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Upcoming ({upcoming.length})</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <p className="text-sm text-muted-foreground text-center py-6">Loading...</p>
-          ) : upcoming.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-6">No upcoming meetings.</p>
-          ) : (
-            <ul className="divide-y">
-              {upcoming.map((m) => (
-                <MeetingRow
-                  key={m.id}
-                  meeting={m}
-                  onStatus={(s) => patchStatus(m.id, s)}
-                  onDelete={() => remove(m.id)}
-                />
-              ))}
-            </ul>
+        <TabsContent value="calendar">
+          <WeeklyCalendarClient />
+        </TabsContent>
+
+        <TabsContent value="list" className="space-y-4">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Upcoming ({upcoming.length})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <p className="text-sm text-muted-foreground text-center py-6">Loading...</p>
+              ) : upcoming.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-6">No upcoming meetings.</p>
+              ) : (
+                <ul className="divide-y">
+                  {upcoming.map((m) => (
+                    <MeetingRow
+                      key={m.id}
+                      meeting={m}
+                      onStatus={(s) => patchStatus(m.id, s)}
+                      onDelete={() => remove(m.id)}
+                    />
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+
+          {past.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base text-muted-foreground">Past / done ({past.length})</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ul className="divide-y opacity-70">
+                  {past.slice(0, 20).map((m) => (
+                    <MeetingRow
+                      key={m.id}
+                      meeting={m}
+                      onStatus={(s) => patchStatus(m.id, s)}
+                      onDelete={() => remove(m.id)}
+                    />
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
           )}
-        </CardContent>
-      </Card>
-
-      {past.length > 0 && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base text-muted-foreground">Past / done ({past.length})</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="divide-y opacity-70">
-              {past.slice(0, 20).map((m) => (
-                <MeetingRow
-                  key={m.id}
-                  meeting={m}
-                  onStatus={(s) => patchStatus(m.id, s)}
-                  onDelete={() => remove(m.id)}
-                />
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      )}
+        </TabsContent>
+      </Tabs>
 
       <BookDialog open={bookOpen} onOpenChange={setBookOpen} onCreated={refresh} />
     </div>

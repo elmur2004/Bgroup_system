@@ -12,7 +12,7 @@ import { SPEC_STAGES } from "@/lib/crm/stage-labels";
  *
  * Managers + admins see the full org; reps see only their own numbers.
  */
-export async function GET() {
+export async function GET(req: Request) {
   const session = (await auth()) as Session | null;
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -23,11 +23,23 @@ export async function GET() {
     session.user.crmRole === "ADMIN" ||
     !!session.user.hrRoles?.includes("super_admin");
 
+  const url = new URL(req.url);
+  const companyIdFilter = url.searchParams.get("companyId");
+  const repIdFilter = url.searchParams.get("repId");
+  const productIdFilter = url.searchParams.get("productId");
+
   const oppScope: Prisma.CrmOpportunityWhereInput = {};
   const meetingScope: Prisma.CrmMeetingWhereInput = {};
   if (!isManager && session.user.crmProfileId) {
     oppScope.ownerId = session.user.crmProfileId;
     meetingScope.scheduledById = session.user.crmProfileId;
+  } else if (isManager && repIdFilter) {
+    oppScope.ownerId = repIdFilter;
+    meetingScope.scheduledById = repIdFilter;
+  }
+  if (companyIdFilter) oppScope.companyId = companyIdFilter;
+  if (productIdFilter) {
+    oppScope.products = { some: { productId: productIdFilter } };
   }
 
   const startOfMonth = new Date();

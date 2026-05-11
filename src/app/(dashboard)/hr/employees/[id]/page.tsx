@@ -17,6 +17,7 @@ import {
   AlertTriangle,
   Gift,
   FileText,
+  TrendingUp,
 } from 'lucide-react'
 import * as Tabs from '@radix-ui/react-tabs'
 import { PageHeader } from '@/components/hr/shared/PageHeader'
@@ -196,6 +197,41 @@ export default function EmployeeDetailPage() {
     carry_over: number
   }>
 
+  // ─── Commission summary (sales reps only) ───────────────────────────────────
+  // Sales reps are real employees with an attached CrmUserProfile. Their
+  // commissions accrue from CRM opportunities they own that hit WON. The API
+  // returns `{ summary: null }` for any non-sales employee, so the tab degrades
+  // gracefully for everyone else.
+  const employeeUserId = (employee as Employee | undefined)?.user as unknown as string | null | undefined
+  const { data: commissionData, isLoading: commissionLoading } = useQuery<{
+    summary: {
+      commissionRate: number
+      lifetime: { count: number; wonValueEGP: number; commissionEGP: number }
+      thisMonth: { count: number; wonValueEGP: number; commissionEGP: number }
+      thisYear: { count: number; wonValueEGP: number; commissionEGP: number }
+      recentWins: Array<{
+        id: string
+        code: string
+        title: string
+        valueEGP: number
+        commissionEGP: number
+        dateClosed: string | null
+        company: string
+      }>
+    } | null
+    message?: string
+  }>({
+    queryKey: ['employee-commissions', employeeUserId],
+    queryFn: async () => {
+      const r = await fetch(`/api/crm/commission-summary?userId=${employeeUserId}`, { credentials: 'include' })
+      if (!r.ok) return { summary: null }
+      return r.json()
+    },
+    enabled: activeTab === 'commissions' && !!employeeUserId,
+  })
+
+  const commissionSummary = commissionData?.summary ?? null
+
   // ─── Loading state ──────────────────────────────────────────────────────────
 
   if (empLoading) {
@@ -311,6 +347,7 @@ export default function EmployeeDetailPage() {
             { value: 'incidents', label: 'Incidents' },
             { value: 'documents', label: 'Documents' },
             { value: 'leave', label: 'Leave Balance' },
+            { value: 'commissions', label: 'Commissions' },
             { value: 'tasks', label: 'Tasks' },
           ].map((tab) => (
             <Tabs.Trigger
@@ -952,7 +989,104 @@ export default function EmployeeDetailPage() {
           </Card>
         </Tabs.Content>
 
-        {/* Tab 9: Tasks */}
+        {/* Tab 9: Commissions (sales reps) */}
+        <Tabs.Content value="commissions">
+          <Card className="p-6">
+            <div className="flex items-center gap-2 mb-5">
+              <TrendingUp className="h-5 w-5 text-emerald-500" />
+              <h3 className="text-base font-semibold text-foreground">Sales Commissions</h3>
+            </div>
+            {!employeeUserId ? (
+              <p className="text-sm text-muted-foreground text-center py-8">
+                This employee has no login account attached, so commissions cannot be tracked.
+              </p>
+            ) : commissionLoading ? (
+              <div className="space-y-3">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <Skeleton key={i} className="h-20 w-full" />
+                ))}
+              </div>
+            ) : !commissionSummary ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <p className="font-medium text-foreground">Not a sales rep</p>
+                <p className="text-sm mt-1">
+                  This employee has no CRM profile. Attach one from the user record to start
+                  tracking commissions.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Totals grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {[
+                    { label: 'This Month', bucket: commissionSummary.thisMonth, accent: 'text-emerald-600 bg-emerald-50' },
+                    { label: 'This Year', bucket: commissionSummary.thisYear, accent: 'text-blue-600 bg-blue-50' },
+                    { label: 'Lifetime', bucket: commissionSummary.lifetime, accent: 'text-purple-600 bg-purple-50' },
+                  ].map((b) => (
+                    <Card key={b.label} className={cn('p-4', b.accent)}>
+                      <p className="text-xs font-semibold uppercase tracking-wider">{b.label}</p>
+                      <p className="text-2xl font-bold mt-1">
+                        {formatCurrency(b.bucket.commissionEGP, 'EGP')}
+                      </p>
+                      <p className="text-xs mt-1 opacity-80">
+                        {b.bucket.count} deal{b.bucket.count !== 1 ? 's' : ''} ·{' '}
+                        {formatCurrency(b.bucket.wonValueEGP, 'EGP')} won
+                      </p>
+                    </Card>
+                  ))}
+                </div>
+
+                <p className="text-xs text-muted-foreground">
+                  Commission rate: {(commissionSummary.commissionRate * 100).toFixed(1)}% of won
+                  opportunity value. Configurable per rep in a later iteration.
+                </p>
+
+                {/* Recent wins */}
+                <div>
+                  <h4 className="text-sm font-semibold text-foreground mb-3">Recent wins</h4>
+                  {commissionSummary.recentWins.length === 0 ? (
+                    <p className="text-sm text-muted-foreground italic">No closed-won deals yet.</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-border">
+                            {['Code', 'Title', 'Company', 'Closed', 'Value', 'Commission'].map((h) => (
+                              <th
+                                key={h}
+                                className="px-3 py-2 text-left text-xs font-semibold text-muted-foreground uppercase whitespace-nowrap"
+                              >
+                                {h}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {commissionSummary.recentWins.map((w) => (
+                            <tr key={w.id} className="hover:bg-muted/50">
+                              <td className="px-3 py-2 font-mono text-xs">{w.code}</td>
+                              <td className="px-3 py-2 max-w-xs truncate">{w.title}</td>
+                              <td className="px-3 py-2 text-muted-foreground">{w.company}</td>
+                              <td className="px-3 py-2 text-muted-foreground">
+                                {w.dateClosed ? formatDate(w.dateClosed) : '—'}
+                              </td>
+                              <td className="px-3 py-2">{formatCurrency(w.valueEGP, 'EGP')}</td>
+                              <td className="px-3 py-2 font-semibold text-emerald-600">
+                                {formatCurrency(w.commissionEGP, 'EGP')}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </Card>
+        </Tabs.Content>
+
+        {/* Tab 10: Tasks */}
         <Tabs.Content value="tasks">
           <Card className="p-6 space-y-4">
             <OnboardingChecklistButton employeeId={employeeId} />

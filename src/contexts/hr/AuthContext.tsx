@@ -64,7 +64,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .list()
       .then((res) => {
         const raw = res.data as { results?: Company[] } | Company[]
-        const list: Company[] = Array.isArray(raw) ? raw : (raw.results ?? [])
+        const all: Company[] = Array.isArray(raw) ? raw : (raw.results ?? [])
+        // Filter out junk / empty-name companies created by older migrations —
+        // they have no employees and would otherwise become the default scope
+        // for super-admins, causing dashboard widgets to read zero rows.
+        const list = all.filter((c) => (c.name_en ?? "").trim() !== "")
         setCompanies(list)
         if (list.length > 0 && !currentCompany) {
           const userCompanies = user.companies

@@ -8,20 +8,24 @@ import {
   Users,
   TrendingUp,
   Handshake,
+  ShieldCheck,
   ChevronDown,
 } from "lucide-react";
 
 interface ModuleInfo {
-  id: "hr" | "crm" | "partners";
+  id: "hr" | "crm" | "partners" | "admin";
   label: string;
   icon: React.ElementType;
   defaultRoute: string;
   color: string;
+  /** If true, only platform-admins see this entry. */
+  adminOnly?: boolean;
 }
 
 const MODULES: ModuleInfo[] = [
+  { id: "admin", label: "Admin", icon: ShieldCheck, defaultRoute: "/admin", color: "text-rose-600", adminOnly: true },
   { id: "hr", label: "HR System", icon: Users, defaultRoute: "/hr/dashboard", color: "text-indigo-600" },
-  { id: "crm", label: "CRM", icon: TrendingUp, defaultRoute: "/crm/my", color: "text-emerald-600" },
+  { id: "crm", label: "CRM", icon: TrendingUp, defaultRoute: "/crm/sales-board", color: "text-emerald-600" },
   { id: "partners", label: "Partners", icon: Handshake, defaultRoute: "/partners/dashboard", color: "text-amber-600" },
 ];
 
@@ -33,10 +37,21 @@ export function ModuleSwitcher({ collapsed }: { collapsed: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
 
   const userModules = session?.user?.modules || [];
-  const availableModules = MODULES.filter((m) => userModules.includes(m.id));
+  const isPlatformAdmin =
+    !!session?.user?.hrRoles?.includes("super_admin") ||
+    (userModules.includes("partners") && !session?.user?.partnerId);
+
+  // Filter: admin module visible only to platform admins; others gated by user.modules.
+  const availableModules = MODULES.filter((m) => {
+    if (m.id === "admin") return isPlatformAdmin;
+    return userModules.includes(m.id as "hr" | "crm" | "partners");
+  });
 
   // Detect active module from pathname
-  const activeModule = MODULES.find((m) => pathname.startsWith(`/${m.id}`)) || availableModules[0];
+  const activeModule =
+    pathname.startsWith("/admin")
+      ? MODULES.find((m) => m.id === "admin")
+      : MODULES.find((m) => pathname.startsWith(`/${m.id}`)) || availableModules[0];
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {

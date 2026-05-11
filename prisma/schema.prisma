@@ -2266,6 +2266,7 @@ model CrmUserProfile {
   assignedCompanies     CrmCompany[]
   calls                 CrmCall[]
   meetings              CrmMeeting[]     @relation("CrmMeetingScheduler")
+  dailyReports          CrmDailyReport[] @relation("CrmDailyReportRep")
   activityLogs          CrmActivityLog[]
   notes                 CrmNote[]
 
@@ -2497,6 +2498,29 @@ model CrmCall {
   @@index([companyId])
   @@index([contactId])
   @@map("crm_calls")
+}
+
+// ============================================================================
+// CRM MODULE — Daily reports (replaces ad-hoc call logging)
+// ============================================================================
+
+model CrmDailyReport {
+  id              String         @id @default(cuid())
+  repId           String
+  rep             CrmUserProfile @relation("CrmDailyReportRep", fields: [repId], references: [id])
+  /// Calendar day this report covers (UTC midnight).
+  reportDate      DateTime
+  callsCount      Int            @default(0)
+  meetingsBooked  Int            @default(0)
+  meetingsHeld    Int            @default(0)
+  newLeads        Int            @default(0)
+  notes           String         @default("")
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@unique([repId, reportDate])
+  @@index([reportDate])
+  @@map("crm_daily_reports")
 }
 
 // ============================================================================

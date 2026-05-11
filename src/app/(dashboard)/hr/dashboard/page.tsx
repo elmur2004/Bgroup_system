@@ -261,7 +261,10 @@ export default function DashboardPage() {
     if (typeof window !== 'undefined') window.location.replace('/employee/home')
     return null
   }
-  const companyId = currentCompany?.id
+  // Super-admins see the full org by default — never scope to a single company
+  // unless they explicitly switch via the company picker. Other roles keep
+  // their existing per-company scope.
+  const companyId = roles.includes('super_admin') ? undefined : currentCompany?.id
   const isSuperAdmin = roles.includes('super_admin')
   const today = new Date()
 

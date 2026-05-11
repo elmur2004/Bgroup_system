@@ -6,11 +6,29 @@ import { useRouter } from 'next/navigation'
 import { Eye, AlertTriangle, Clock, Loader2 } from 'lucide-react'
 import { PageHeader } from '@/components/hr/shared/PageHeader'
 import { Button } from '@/components/hr/ui/button'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/hr/ui/avatar'
+import { Avatar, AvatarFallback } from '@/components/hr/ui/avatar'
 import { Badge } from '@/components/hr/ui/badge'
 import api from '@/lib/hr/api'
 import { getInitials, capitalize, cn } from '@/lib/hr/utils'
-import type { Employee, PaginatedResponse } from '@/lib/hr/types'
+
+/**
+ * /hr/team — anyone with reports sees them here. Membership is derived from
+ * the org chart (HrEmployee.directManager → reports), not a `team_lead` role
+ * flag. The page renders nothing-state when the user has no subordinates.
+ */
+
+type Subordinate = {
+  id: string
+  employeeId: string
+  fullNameEn: string
+  positionEn: string
+  status: string
+  userId: string | null
+  directManagerId: string | null
+  directManager: { id: string; fullNameEn: string } | null
+  department: { id: string; nameEn: string } | null
+  company: { id: string; nameEn: string } | null
+}
 
 interface AttendanceToday {
   employee_id: string
@@ -39,11 +57,15 @@ const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'danger' | 'info' |
 export default function TeamPage() {
   const router = useRouter()
 
-  const { data: teamData, isLoading } = useQuery<{ data: PaginatedResponse<Employee> }>({
+  const { data: teamData, isLoading } = useQuery<{ subordinates: Subordinate[]; total: number }>({
     queryKey: ['my-team'],
-    queryFn: () => api.get('/employees/', { params: { managed_by: 'me', page_size: 100 } }),
+    queryFn: async () => {
+      const r = await fetch('/api/hr/subordinates', { credentials: 'include' })
+      if (!r.ok) return { subordinates: [], total: 0 }
+      return r.json()
+    },
   })
-  const teamMembers = teamData?.data?.results ?? []
+  const teamMembers = teamData?.subordinates ?? []
 
   const { data: attendanceData } = useQuery<{ data: { stats: Record<string, number>; logs: AttendanceToday[] } }>({
     queryKey: ['team-attendance-today'],
@@ -74,7 +96,8 @@ export default function TeamPage() {
 
       {teamMembers.length === 0 && (
         <div className="bg-card rounded-lg border border-border p-12 text-center text-muted-foreground">
-          No team members assigned to you.
+          No-one reports to you yet. When an HR admin sets you as someone&apos;s direct
+          manager, they (and anyone reporting up through them) will appear here.
         </div>
       )}
 
@@ -91,15 +114,14 @@ export default function TeamPage() {
               {/* Header */}
               <div className="flex items-start gap-3">
                 <Avatar className="h-12 w-12 shrink-0">
-                  <AvatarImage src={member.photo ?? undefined} alt={member.full_name_en} />
                   <AvatarFallback className="text-sm font-bold bg-blue-100 text-blue-700">
-                    {getInitials(member.full_name_en)}
+                    {getInitials(member.fullNameEn)}
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-foreground leading-tight truncate">{member.full_name_en}</p>
-                  <p className="text-xs text-muted-foreground truncate">{member.position_en}</p>
-                  <p className="text-xs text-muted-foreground truncate">{member.department_name}</p>
+                  <p className="text-sm font-semibold text-foreground leading-tight truncate">{member.fullNameEn}</p>
+                  <p className="text-xs text-muted-foreground truncate">{member.positionEn || '—'}</p>
+                  <p className="text-xs text-muted-foreground truncate">{member.department?.nameEn ?? '—'}</p>
                 </div>
               </div>
 
