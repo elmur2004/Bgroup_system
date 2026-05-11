@@ -1,26 +1,265 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans:
+    var(--font-sans), var(--font-sans-ar), ui-sans-serif, system-ui,
+    sans-serif;
+  --font-mono: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-heading:
+    var(--font-display), var(--font-sans), var(--font-sans-ar), ui-sans-serif,
+    system-ui, sans-serif;
+  --font-display:
+    var(--font-display), var(--font-sans), var(--font-sans-ar), ui-sans-serif,
+    system-ui, sans-serif;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
+  --color-chart-7: var(--chart-7);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-primary-strong: var(--primary-strong);
+  --color-primary-soft: var(--primary-soft);
+  --color-tile-indigo: var(--tile-indigo);
+  --color-tile-indigo-fg: var(--tile-indigo-fg);
+  --color-tile-violet: var(--tile-violet);
+  --color-tile-violet-fg: var(--tile-violet-fg);
+  --color-tile-emerald: var(--tile-emerald);
+  --color-tile-emerald-fg: var(--tile-emerald-fg);
+  --color-tile-amber: var(--tile-amber);
+  --color-tile-amber-fg: var(--tile-amber-fg);
+  --color-tile-rose: var(--tile-rose);
+  --color-tile-rose-fg: var(--tile-rose-fg);
+  --color-tile-sky: var(--tile-sky);
+  --color-tile-sky-fg: var(--tile-sky-fg);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* Softer, more sophisticated shadow stack — modern dashboard feel. */
+  --shadow-card: 0 1px 2px oklch(0.5 0.08 270 / 0.05), 0 4px 16px oklch(0.5 0.08 270 / 0.04);
+  --shadow-card-hover: 0 1px 3px oklch(0.5 0.08 270 / 0.08), 0 12px 32px oklch(0.5 0.08 270 / 0.08);
+  --shadow-glow: 0 0 0 1px oklch(0.5 0.24 270 / 0.15), 0 8px 24px oklch(0.5 0.24 270 / 0.18);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+:root {
+  /* Warmer neutral — hue 255 keeps a subtle violet-leaning grey */
+  --background: oklch(0.985 0.005 280);
+  --foreground: oklch(0.17 0.018 255);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.17 0.018 255);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.17 0.018 255);
+
+  /* Primary — deeper indigo with paired gradient endpoint */
+  --primary: oklch(0.5 0.24 270);
+  --primary-foreground: oklch(0.99 0 0);
+  --primary-strong: oklch(0.42 0.25 275);
+  --primary-soft: oklch(0.95 0.04 280);
+
+  /* Per-module accent colors (stat-card tiles, status pills, etc.) */
+  --tile-indigo: oklch(0.95 0.06 270);
+  --tile-indigo-fg: oklch(0.45 0.22 270);
+  --tile-violet: oklch(0.95 0.06 300);
+  --tile-violet-fg: oklch(0.45 0.22 300);
+  --tile-emerald: oklch(0.94 0.06 155);
+  --tile-emerald-fg: oklch(0.45 0.16 155);
+  --tile-amber: oklch(0.95 0.08 75);
+  --tile-amber-fg: oklch(0.45 0.16 75);
+  --tile-rose: oklch(0.95 0.06 15);
+  --tile-rose-fg: oklch(0.5 0.2 15);
+  --tile-sky: oklch(0.94 0.06 225);
+  --tile-sky-fg: oklch(0.45 0.18 225);
+
+  --secondary: oklch(0.965 0.012 255);
+  --secondary-foreground: oklch(0.27 0.04 255);
+
+  --muted: oklch(0.97 0.008 255);
+  --muted-foreground: oklch(0.52 0.02 255);
+
+  /* Accent — violet */
+  --accent: oklch(0.96 0.02 290);
+  --accent-foreground: oklch(0.35 0.14 290);
+
+  /* Status colors */
+  --success: oklch(0.65 0.15 155);
+  --success-foreground: oklch(0.99 0 0);
+  --warning: oklch(0.75 0.18 70);
+  --warning-foreground: oklch(0.2 0.04 70);
+  --destructive: oklch(0.58 0.22 15);
+  --destructive-foreground: oklch(0.99 0 0);
+  --info: oklch(0.65 0.18 225);
+  --info-foreground: oklch(0.99 0 0);
+
+  --border: oklch(0.93 0.012 280);
+  --input: oklch(0.93 0.012 280);
+  --ring: oklch(0.5 0.24 270);
+
+  /* Charts — 7 distinct hues around the wheel */
+  --chart-1: oklch(0.62 0.2 264); /* indigo */
+  --chart-2: oklch(0.6 0.22 290); /* violet */
+  --chart-3: oklch(0.65 0.15 155); /* emerald */
+  --chart-4: oklch(0.75 0.18 70); /* amber */
+  --chart-5: oklch(0.58 0.22 15); /* rose */
+  --chart-6: oklch(0.65 0.18 225); /* sky */
+  --chart-7: oklch(0.6 0.18 330); /* pink */
+
+  --radius: 0.875rem;
+
+  --sidebar: oklch(0.995 0.004 280);
+  --sidebar-foreground: oklch(0.17 0.018 255);
+  --sidebar-primary: oklch(0.5 0.24 270);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.94 0.04 280);
+  --sidebar-accent-foreground: oklch(0.35 0.18 280);
+  --sidebar-border: oklch(0.93 0.012 280);
+  --sidebar-ring: oklch(0.5 0.24 270);
+}
+
+.dark {
+  --background: oklch(0.13 0.018 275);
+  --foreground: oklch(0.97 0.005 255);
+  --card: oklch(0.18 0.022 275);
+  --card-foreground: oklch(0.97 0.005 255);
+  --popover: oklch(0.18 0.022 275);
+  --popover-foreground: oklch(0.97 0.005 255);
+
+  --primary: oklch(0.72 0.22 270);
+  --primary-foreground: oklch(0.12 0.03 270);
+  --primary-strong: oklch(0.78 0.2 275);
+  --primary-soft: oklch(0.28 0.08 280);
+
+  /* Per-module tiles — darker bg, lighter fg in dark mode */
+  --tile-indigo: oklch(0.28 0.1 270);
+  --tile-indigo-fg: oklch(0.85 0.16 270);
+  --tile-violet: oklch(0.28 0.1 300);
+  --tile-violet-fg: oklch(0.85 0.16 300);
+  --tile-emerald: oklch(0.28 0.08 155);
+  --tile-emerald-fg: oklch(0.85 0.14 155);
+  --tile-amber: oklch(0.3 0.1 75);
+  --tile-amber-fg: oklch(0.88 0.16 75);
+  --tile-rose: oklch(0.28 0.1 15);
+  --tile-rose-fg: oklch(0.85 0.18 15);
+  --tile-sky: oklch(0.28 0.08 225);
+  --tile-sky-fg: oklch(0.85 0.14 225);
+
+  --secondary: oklch(0.24 0.025 255);
+  --secondary-foreground: oklch(0.97 0.005 255);
+
+  --muted: oklch(0.24 0.02 255);
+  --muted-foreground: oklch(0.7 0.02 255);
+
+  --accent: oklch(0.28 0.06 290);
+  --accent-foreground: oklch(0.92 0.05 290);
+
+  --success: oklch(0.7 0.15 155);
+  --success-foreground: oklch(0.12 0.03 155);
+  --warning: oklch(0.8 0.16 70);
+  --warning-foreground: oklch(0.18 0.04 70);
+  --destructive: oklch(0.68 0.22 15);
+  --destructive-foreground: oklch(0.99 0 0);
+  --info: oklch(0.72 0.17 225);
+  --info-foreground: oklch(0.12 0.03 225);
+
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.7 0.2 264);
+
+  --chart-1: oklch(0.7 0.2 264);
+  --chart-2: oklch(0.68 0.22 290);
+  --chart-3: oklch(0.72 0.15 155);
+  --chart-4: oklch(0.8 0.17 70);
+  --chart-5: oklch(0.68 0.22 15);
+  --chart-6: oklch(0.72 0.17 225);
+  --chart-7: oklch(0.68 0.18 330);
+
+  --sidebar: oklch(0.17 0.018 255);
+  --sidebar-foreground: oklch(0.97 0.005 255);
+  --sidebar-primary: oklch(0.7 0.2 264);
+  --sidebar-primary-foreground: oklch(0.97 0 0);
+  --sidebar-accent: oklch(0.26 0.05 290);
+  --sidebar-accent-foreground: oklch(0.92 0.05 290);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.7 0.2 264);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer utilities {
+  /* Gradient primary surface — used by primary buttons + active sidebar pill. */
+  .bg-primary-gradient {
+    background-image: linear-gradient(135deg, var(--primary) 0%, var(--primary-strong) 100%);
+  }
+  .bg-primary-gradient-soft {
+    background-image: linear-gradient(135deg, var(--primary-soft) 0%, oklch(from var(--primary-soft) calc(l - 0.04) c h) 100%);
+  }
+  /* Card with the modern soft-shadow look used across all references. */
+  .card-soft {
+    background: var(--card);
+    border: 1px solid color-mix(in oklch, var(--border) 60%, transparent);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-card);
+    transition: box-shadow 150ms ease, transform 150ms ease, border-color 150ms ease;
+  }
+  .card-soft:hover {
+    box-shadow: var(--shadow-card-hover);
+  }
+  /* Coloured KPI tile (icon square inside stat cards). */
+  .tile-indigo  { background: var(--tile-indigo);  color: var(--tile-indigo-fg); }
+  .tile-violet  { background: var(--tile-violet);  color: var(--tile-violet-fg); }
+  .tile-emerald { background: var(--tile-emerald); color: var(--tile-emerald-fg); }
+  .tile-amber   { background: var(--tile-amber);   color: var(--tile-amber-fg); }
+  .tile-rose    { background: var(--tile-rose);    color: var(--tile-rose-fg); }
+  .tile-sky     { background: var(--tile-sky);     color: var(--tile-sky-fg); }
 }

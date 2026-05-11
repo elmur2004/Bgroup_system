@@ -1,0 +1,70 @@
+import { NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { z } from "zod";
+
+const patchSchema = z.object({
+  name: z.string().trim().min(1).max(60).optional(),
+  filters: z.unknown().optional(),
+  sort: z.unknown().optional(),
+  columns: z.unknown().optional(),
+  isShared: z.boolean().optional(),
+  isDefault: z.boolean().optional(),
+});
+
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const { id } = await params;
+
+  const view = await db.savedView.findUnique({ where: { id } });
+  if (!view || view.userId !== session.user.id) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const body = await req.json();
+  const parsed = patchSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
+  }
+
+  const updated = await db.savedView.update({
+    where: { id },
+    data: {
+      ...(parsed.data.name !== undefined && { name: parsed.data.name }),
+      ...(parsed.data.filters !== undefined && {
+        filters: parsed.data.filters as object,
+      }),
+      ...(parsed.data.sort !== undefined && {
+        sort: parsed.data.sort as object,
+      }),
+      ...(parsed.data.columns !== undefined && {
+        columns: parsed.data.columns as object,
+      }),
+      ...(parsed.data.isShared !== undefined && { isShared: parsed.data.isShared }),
+      ...(parsed.data.isDefault !== undefined && { isDefault: parsed.data.isDefault }),
+    },
+  });
+  return NextResponse.json({ view: updated });
+}
+
+export async function DELETE(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const { id } = await params;
+  const r = await db.savedView.deleteMany({
+    where: { id, userId: session.user.id },
+  });
+  if (r.count === 0) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  return new NextResponse(null, { status: 204 });
+}
