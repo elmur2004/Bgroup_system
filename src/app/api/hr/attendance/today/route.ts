@@ -8,9 +8,16 @@ export async function GET(request: Request) {
     const authUser = await requireAuth(request)
     const url = new URL(request.url)
     const companyId = url.searchParams.get('company')
-
+    // Optional ?date=YYYY-MM-DD — defaults to today. Anything malformed
+    // falls back to today so the page doesn't 500 on garbage input.
+    const dateParam = url.searchParams.get('date')
     const today = new Date()
     today.setHours(0, 0, 0, 0)
+    if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
+      const [y, m, d] = dateParam.split('-').map(Number)
+      today.setFullYear(y, m - 1, d)
+      today.setHours(0, 0, 0, 0)
+    }
 
     const isHR = canViewAllEmployees(authUser)
 

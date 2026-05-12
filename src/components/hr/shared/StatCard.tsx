@@ -1,5 +1,6 @@
 import React from 'react'
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import Link from 'next/link'
+import { TrendingUp, TrendingDown, Minus, ArrowUpRight } from 'lucide-react'
 import { cn } from '@/lib/hr/utils'
 import { Card } from '@/components/hr/ui/card'
 import { Skeleton } from '@/components/hr/ui/skeleton'
@@ -15,6 +16,12 @@ interface StatCardProps {
   loading?: boolean
   className?: string
   compact?: boolean
+  /**
+   * Optional deep-link to the data the card summarises. When set, the card
+   * renders as a Link with hover affordance — every dashboard stat is now
+   * a one-click jump to its source.
+   */
+  href?: string
 }
 
 const colorMap = {
@@ -56,6 +63,7 @@ export function StatCard({
   loading = false,
   className,
   compact = false,
+  href,
 }: StatCardProps) {
   const colors = colorMap[color]
 
@@ -72,17 +80,23 @@ export function StatCard({
     )
   }
 
-  return (
-    <Card className={cn('p-6 hover:shadow-card-hover transition-shadow', className)}>
-      <div className="flex items-start justify-between">
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-muted-foreground truncate">{label}</p>
-          <p className={cn('mt-2 font-bold text-foreground', compact ? 'text-xl' : 'text-3xl')}>
-            {typeof value === 'number' ? value.toLocaleString() : value}
-          </p>
-          {subtext && (
-            <p className="mt-1 text-xs text-muted-foreground truncate">{subtext}</p>
+  // Inner content reused for both Link and div wrapper. Pulled out so we don't
+  // duplicate 30 lines just to swap the outer element.
+  const inner = (
+    <div className="flex items-start justify-between">
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-muted-foreground truncate flex items-center gap-1">
+          {label}
+          {href && (
+            <ArrowUpRight className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
           )}
+        </p>
+        <p className={cn('mt-2 font-bold text-foreground', compact ? 'text-xl' : 'text-3xl')}>
+          {typeof value === 'number' ? value.toLocaleString() : value}
+        </p>
+        {subtext && (
+          <p className="mt-1 text-xs text-muted-foreground truncate">{subtext}</p>
+        )}
           {trend !== undefined && (
             <div className="mt-2 flex items-center gap-1">
               {trend > 0 ? (
@@ -112,6 +126,21 @@ export function StatCard({
           </div>
         )}
       </div>
+  )
+
+  if (href) {
+    return (
+      <Link href={href} className="group block">
+        <Card className={cn('p-6 hover:shadow-card-hover hover:border-primary/40 transition-all cursor-pointer', className)}>
+          {inner}
+        </Card>
+      </Link>
+    )
+  }
+
+  return (
+    <Card className={cn('p-6 hover:shadow-card-hover transition-shadow', className)}>
+      {inner}
     </Card>
   )
 }

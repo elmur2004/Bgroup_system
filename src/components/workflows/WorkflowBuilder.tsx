@@ -40,11 +40,15 @@ type Step = {
   assigneeUserId: string | null;
   assigneeRole: string | null;
   budgetHours: number;
+  /** For CUSTOM workflows: ISO datetime string when the step must be done. */
+  deadlineAt: string | null;
   slaIncidentOnLate: boolean;
   slaBonusOnEarly: boolean;
   taskType: string;
   taskPriority: string;
 };
+
+type WorkflowKind = "TEMPLATE" | "CUSTOM";
 
 type Member = { id: string; name: string | null; email: string };
 
@@ -64,6 +68,7 @@ export function WorkflowBuilder({ workflowId }: { workflowId?: string }) {
   const [description, setDescription] = useState("");
   const [moduleName, setModuleName] = useState<"hr" | "crm" | "partners" | "general">("general");
   const [isActive, setIsActive] = useState(true);
+  const [kind, setKind] = useState<WorkflowKind>("TEMPLATE");
   const [steps, setSteps] = useState<Step[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(isEdit);
@@ -92,9 +97,11 @@ export function WorkflowBuilder({ workflowId }: { workflowId?: string }) {
         setDescription(wf.description ?? "");
         setModuleName(wf.module ?? "general");
         setIsActive(wf.isActive);
+        setKind((wf.kind as WorkflowKind | undefined) ?? "TEMPLATE");
         setSteps(
-          (wf.steps ?? []).map((s: Omit<Step, "uid">) => ({
+          (wf.steps ?? []).map((s: Omit<Step, "uid"> & { deadlineAt?: string | null }) => ({
             ...s,
+            deadlineAt: s.deadlineAt ?? null,
             uid: uid(),
           }))
         );
@@ -114,6 +121,7 @@ export function WorkflowBuilder({ workflowId }: { workflowId?: string }) {
         assigneeUserId: null,
         assigneeRole: "creator",
         budgetHours: 8,
+        deadlineAt: null,
         slaIncidentOnLate: true,
         slaBonusOnEarly: true,
         taskType: "GENERAL",
@@ -155,6 +163,10 @@ export function WorkflowBuilder({ workflowId }: { workflowId?: string }) {
         toast.error(`Step "${s.name}" needs a task title`);
         return;
       }
+      if (kind === "CUSTOM" && !s.deadlineAt) {
+        toast.error(`Step "${s.name}" needs an absolute deadline (CUSTOM workflow)`);
+        return;
+      }
     }
 
     setSaving(true);
@@ -164,6 +176,7 @@ export function WorkflowBuilder({ workflowId }: { workflowId?: string }) {
         description,
         module: moduleName,
         isActive,
+        kind,
         steps: steps.map((s, idx) => ({
           position: idx,
           name: s.name,
@@ -172,6 +185,7 @@ export function WorkflowBuilder({ workflowId }: { workflowId?: string }) {
           assigneeUserId: s.assigneeUserId,
           assigneeRole: s.assigneeRole,
           budgetHours: s.budgetHours,
+          deadlineAt: kind === "CUSTOM" ? s.deadlineAt : null,
           slaIncidentOnLate: s.slaIncidentOnLate,
           slaBonusOnEarly: s.slaBonusOnEarly,
           taskType: s.taskType,
@@ -235,6 +249,45 @@ export function WorkflowBuilder({ workflowId }: { workflowId?: string }) {
             <Checkbox checked={isActive} onCheckedChange={(v) => setIsActive(!!v)} />
             <span className="text-sm">Active (allow triggering)</span>
           </div>
+
+          {/* Kind toggle: TEMPLATE (reusable, relative budgets) vs CUSTOM
+              (one-shot, absolute deadlines). Steps switch their timing
+              control depending on this. */}
+          <div className="md:col-span-2 rounded-lg border border-dashed border-border bg-muted/30 p-3 space-y-2">
+            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Run mode</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setKind("TEMPLATE")}
+                className={`text-start rounded-md border p-3 transition-colors ${
+                  kind === "TEMPLATE"
+                    ? "border-primary bg-primary/5"
+                    : "border-border bg-background hover:bg-muted/50"
+                }`}
+              >
+                <p className="text-sm font-semibold">Template</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Reusable. Step duration is a relative budget (e.g. 8h after the prior step
+                  completes). Triggered any number of times.
+                </p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setKind("CUSTOM")}
+                className={`text-start rounded-md border p-3 transition-colors ${
+                  kind === "CUSTOM"
+                    ? "border-primary bg-primary/5"
+                    : "border-border bg-background hover:bg-muted/50"
+                }`}
+              >
+                <p className="text-sm font-semibold">Custom (one-shot)</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Each step has an absolute deadline (e.g. &ldquo;done by Friday 23:59&rdquo;).
+                  Auto-archived after the run completes.
+                </p>
+              </button>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -261,6 +314,7 @@ export function WorkflowBuilder({ workflowId }: { workflowId?: string }) {
                       step={s}
                       index={i}
                       members={members}
+                      kind={kind}
                       onChange={(patch) => patchStep(s.uid, patch)}
                       onRemove={() => removeStep(s.uid)}
                       isLast={i === steps.length - 1}
@@ -290,6 +344,7 @@ function SortableStep({
   step,
   index,
   members,
+  kind,
   onChange,
   onRemove,
   isLast,
@@ -297,6 +352,7 @@ function SortableStep({
   step: Step;
   index: number;
   members: Member[];
+  kind: WorkflowKind;
   onChange: (patch: Partial<Step>) => void;
   onRemove: () => void;
   isLast: boolean;
@@ -338,15 +394,29 @@ function SortableStep({
             value={step.taskTitle}
             onChange={(e) => onChange({ taskTitle: e.target.value })}
           />
-          <Input
-            type="number"
-            className="md:col-span-1"
-            placeholder="Hours"
-            value={step.budgetHours}
-            min={0.25}
-            step={0.25}
-            onChange={(e) => onChange({ budgetHours: Number(e.target.value) || 1 })}
-          />
+          {kind === "TEMPLATE" ? (
+            <Input
+              type="number"
+              className="md:col-span-1"
+              placeholder="Hours"
+              value={step.budgetHours}
+              min={0.25}
+              step={0.25}
+              title="Hours after the previous step completes"
+              onChange={(e) => onChange({ budgetHours: Number(e.target.value) || 1 })}
+            />
+          ) : (
+            <Input
+              type="datetime-local"
+              className="md:col-span-2"
+              title="Absolute deadline — task must be done by this date/time"
+              value={step.deadlineAt ? step.deadlineAt.slice(0, 16) : ""}
+              onChange={(e) => {
+                const v = e.target.value;
+                onChange({ deadlineAt: v ? new Date(v).toISOString() : null });
+              }}
+            />
+          )}
           <Select
             value={step.assigneeUserId ?? `role:${step.assigneeRole ?? "creator"}`}
             onValueChange={(v) => {

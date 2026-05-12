@@ -70,7 +70,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const result = await loadTaskOrError(id, session.user.id, isPlatformAdmin(session));
+  const admin = isPlatformAdmin(session);
+  const result = await loadTaskOrError(id, session.user.id, admin);
   if ("error" in result) return result.error;
 
   const body = await req.json();
@@ -79,6 +80,37 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
   }
   const { delegationNote, recurrence, ...rest } = parsed.data;
+
+  // Permission model: a task's CREATOR (or a platform admin) has full edit
+  // authority. The ASSIGNEE, when they didn't author the task, can only act
+  // on it — Start/End it (status transitions) and comment on it. Trying to
+  // change any other field is a 403, by design. This makes downstream workflow
+  // steps tamper-proof: the upstream assignee can't rewrite the task someone
+  // else handed them.
+  const isCreator = result.task.createdById === session.user.id;
+  if (!admin && !isCreator) {
+    const ALLOWED_FIELDS_FOR_ASSIGNEE = new Set(["status"]);
+    const violating = Object.keys(rest).filter(
+      (k) => rest[k as keyof typeof rest] !== undefined && !ALLOWED_FIELDS_FOR_ASSIGNEE.has(k)
+    );
+    if (violating.length > 0 || recurrence !== undefined || delegationNote) {
+      return NextResponse.json(
+        {
+          error: `Only the task creator can edit ${violating.join(", ") || "this"}. You can Start/End the task, add comments, or attach files.`,
+        },
+        { status: 403 }
+      );
+    }
+    // Assignees can move TODO → IN_PROGRESS → DONE; revoking DONE is allowed
+    // so they can re-open work in progress, but cancelling is creator-only.
+    if (rest.status && !["TODO", "IN_PROGRESS", "DONE"].includes(rest.status)) {
+      return NextResponse.json(
+        { error: "Only the creator can cancel a task." },
+        { status: 403 }
+      );
+    }
+  }
+
   const next = { ...rest } as Record<string, unknown>;
 
   // Auto-fill completedAt / completedById when transitioning to DONE.
@@ -218,8 +250,18 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const result = await loadTaskOrError(id, session.user.id, isPlatformAdmin(session));
+  const admin = isPlatformAdmin(session);
+  const result = await loadTaskOrError(id, session.user.id, admin);
   if ("error" in result) return result.error;
+
+  // Same permission model as PATCH: only the creator (or a platform admin) can
+  // delete. Assignees can't unilaterally make a task assigned to them vanish.
+  if (!admin && result.task.createdById !== session.user.id) {
+    return NextResponse.json(
+      { error: "Only the task creator can delete this task." },
+      { status: 403 }
+    );
+  }
 
   await db.task.delete({ where: { id } });
   return NextResponse.json({ success: true });

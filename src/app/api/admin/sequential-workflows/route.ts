@@ -13,6 +13,9 @@ const stepSchema = z.object({
   assigneeUserId: z.string().nullable().optional(),
   assigneeRole: z.string().nullable().optional(),
   budgetHours: z.number().positive().max(720).default(8),
+  /// For CUSTOM workflows: the absolute deadline this step must be completed
+  /// by. ISO 8601 datetime. Required when kind === "CUSTOM", ignored otherwise.
+  deadlineAt: z.string().datetime().nullable().optional(),
   slaIncidentOnLate: z.boolean().optional(),
   slaBonusOnEarly: z.boolean().optional(),
   taskType: z.string().optional(),
@@ -24,8 +27,14 @@ const createSchema = z.object({
   description: z.string().trim().max(1000).optional().default(""),
   module: z.enum(["hr", "crm", "partners", "general"]).optional(),
   isActive: z.boolean().optional(),
+  /// TEMPLATE (default) is reusable; CUSTOM is one-shot and uses absolute
+  /// deadlines per step. The picker hides CUSTOM workflows after they've run.
+  kind: z.enum(["TEMPLATE", "CUSTOM"]).optional().default("TEMPLATE"),
   steps: z.array(stepSchema).min(1).max(50),
-});
+}).refine(
+  (d) => d.kind !== "CUSTOM" || d.steps.every((s) => !!s.deadlineAt),
+  { message: "Every step in a CUSTOM workflow must have an absolute deadline (deadlineAt)" }
+);
 
 function isPlatformAdmin(session: Session) {
   return (
@@ -34,12 +43,17 @@ function isPlatformAdmin(session: Session) {
   );
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const session = (await auth()) as Session | null;
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  // Default GET hides consumed CUSTOM workflows. Pass ?includeConsumed=1 to
+  // see them (audit trail).
+  const url = new URL(req.url);
+  const includeConsumed = url.searchParams.get("includeConsumed") === "1";
   const workflows = await db.sequentialWorkflow.findMany({
+    where: includeConsumed ? {} : { consumedAt: null },
     orderBy: { updatedAt: "desc" },
     include: { steps: { orderBy: { position: "asc" } } },
   });
@@ -69,6 +83,7 @@ export async function POST(req: Request) {
         description: data.description ?? "",
         module: data.module ?? "general",
         isActive: data.isActive ?? true,
+        kind: data.kind,
         createdById: session.user.id,
         steps: {
           create: data.steps.map((s, idx) => ({
@@ -79,6 +94,7 @@ export async function POST(req: Request) {
             assigneeUserId: s.assigneeUserId ?? null,
             assigneeRole: s.assigneeRole ?? null,
             budgetHours: s.budgetHours,
+            deadlineAt: s.deadlineAt ? new Date(s.deadlineAt) : null,
             slaIncidentOnLate: s.slaIncidentOnLate ?? true,
             slaBonusOnEarly: s.slaBonusOnEarly ?? true,
             taskType: s.taskType ?? "GENERAL",

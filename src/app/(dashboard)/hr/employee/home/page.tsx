@@ -3,6 +3,7 @@
 import React from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import {
   Clock,
   TrendingUp,
@@ -13,6 +14,8 @@ import {
   UserX,
   CheckCircle2,
   ChevronRight,
+  Target,
+  Briefcase,
 } from 'lucide-react'
 import { PageHeader } from '@/components/hr/shared/PageHeader'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/hr/ui/card'
@@ -22,6 +25,23 @@ import { Skeleton } from '@/components/hr/ui/skeleton'
 import { useAuth } from '@/contexts/hr/AuthContext'
 import api from '@/lib/hr/api'
 import { formatCurrency, formatDate } from '@/lib/hr/utils'
+
+type CommissionBucket = { count: number; wonValueEGP: number; commissionEGP: number }
+interface CommissionSummary {
+  commissionRate: number
+  lifetime: CommissionBucket
+  thisMonth: CommissionBucket
+  thisYear: CommissionBucket
+  recentWins: Array<{
+    id: string
+    code: string
+    title: string
+    valueEGP: number
+    commissionEGP: number
+    dateClosed: string | null
+    company: string
+  }>
+}
 
 interface AttendanceSummary {
   attendance_rate: number
@@ -109,10 +129,29 @@ function StatBox({
 
 export default function EmployeeHomePage() {
   const { user } = useAuth()
+  const { data: session } = useSession()
   const router = useRouter()
   const now = new Date()
   const month = now.getMonth() + 1
   const year = now.getFullYear()
+
+  // A "sales rep" is just an employee with a CRM profile attached. We branch
+  // the dashboard on this single signal: sales reps see commission performance
+  // before their attendance/payroll widgets; everyone else sees the standard
+  // employee view.
+  const isSalesRep = !!session?.user?.crmProfileId
+  const crmRole = session?.user?.crmRole
+
+  const commissionQuery = useQuery<{ summary: CommissionSummary | null }>({
+    queryKey: ['my-commissions'],
+    queryFn: async () => {
+      const r = await fetch('/api/crm/commission-summary', { credentials: 'include' })
+      if (!r.ok) return { summary: null }
+      return r.json()
+    },
+    enabled: isSalesRep,
+  })
+  const commission = commissionQuery.data?.summary ?? null
 
   const todayQuery = useQuery<TodayStatus>({
     queryKey: ['attendance', 'today-my'],
@@ -224,6 +263,106 @@ export default function EmployeeHomePage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* ── Sales Performance (sales reps only) ──
+          Branches the employee experience on whether the user has a CRM
+          profile. A sales rep is, by definition, an employee with a
+          CrmUserProfile — they see commission performance up here next to
+          their attendance, ahead of payroll/bonuses below. */}
+      {isSalesRep && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+              <Briefcase className="h-4 w-4 text-emerald-600" />
+              Sales Performance
+              {crmRole && (
+                <Badge variant="info" className="text-[10px] uppercase tracking-widest ml-1">
+                  {crmRole}
+                </Badge>
+              )}
+            </h2>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={() => router.push('/crm/my')}>
+                <Target className="h-3.5 w-3.5 me-1" /> Pipeline
+              </Button>
+              <Button size="sm" onClick={() => router.push('/crm/opportunities/new')}>
+                + New deal
+              </Button>
+            </div>
+          </div>
+
+          {commissionQuery.isLoading ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {[0, 1, 2].map((i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
+            </div>
+          ) : commission ? (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-3">
+                <StatBox
+                  label="Commissions · This Month"
+                  value={formatCurrency(commission.thisMonth.commissionEGP, 'EGP')}
+                  sub={`${commission.thisMonth.count} won · ${formatCurrency(commission.thisMonth.wonValueEGP, 'EGP')} in deals`}
+                  color="emerald"
+                />
+                <StatBox
+                  label="Commissions · This Year"
+                  value={formatCurrency(commission.thisYear.commissionEGP, 'EGP')}
+                  sub={`${commission.thisYear.count} closed-won`}
+                  color="blue"
+                />
+                <StatBox
+                  label="Commissions · Lifetime"
+                  value={formatCurrency(commission.lifetime.commissionEGP, 'EGP')}
+                  sub={`Rate: ${(commission.commissionRate * 100).toFixed(0)}% of deal value`}
+                  color="navy"
+                />
+              </div>
+
+              {commission.recentWins.length > 0 && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-semibold flex items-center justify-between">
+                      <span>Recent wins</span>
+                      <Button size="sm" variant="link" onClick={() => router.push('/crm/opportunities?stage=WON')}>
+                        See all <ChevronRight className="h-3 w-3 ml-0.5" />
+                      </Button>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="divide-y divide-border">
+                      {commission.recentWins.slice(0, 5).map((w) => (
+                        <div key={w.id} className="py-2 flex items-center justify-between gap-2 text-sm">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium truncate">{w.title}</p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {w.company} · <span className="font-mono">{w.code}</span>
+                              {w.dateClosed ? ` · ${formatDate(w.dateClosed)}` : ''}
+                            </p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="font-semibold text-emerald-600">
+                              {formatCurrency(w.commissionEGP, 'EGP')}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground">
+                              of {formatCurrency(w.valueEGP, 'EGP')}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </>
+          ) : (
+            <Card>
+              <CardContent className="py-6 text-center text-muted-foreground text-sm">
+                No closed-won deals yet. Win your first deal to start earning commissions.
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
 
       {/* ── This Month's Stats ── */}
       <div>

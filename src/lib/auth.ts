@@ -226,19 +226,43 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       const shouldRefresh = !!user?.email || trigger === "update" || !token.modules || stale;
       if (shouldRefresh) {
         const email = (user?.email || token.email) as string;
-        const dbUser = await db.user.findUnique({
-          where: { email },
-          include: {
-            hrProfile: {
-              include: {
-                roles: { include: { role: true } },
-                companies: true,
+        // Wrap the refresh in try/catch — a transient DB blip during JWT
+        // refresh would otherwise propagate up to NextAuth and return a null
+        // session, which the proxy interprets as "unauthenticated" and
+        // redirects. Better to ship the stale token than to log the user out
+        // on a flake.
+        const dbUser = await db.user
+          .findUnique({
+            where: { email },
+            include: {
+              hrProfile: {
+                include: {
+                  roles: { include: { role: true } },
+                  companies: true,
+                },
+              },
+              crmProfile: true,
+              partnerProfile: true,
+              hrEmployee: {
+                select: {
+                  id: true,
+                  subordinates: { take: 1, select: { id: true } },
+                },
               },
             },
-            crmProfile: true,
-            partnerProfile: true,
-          },
-        });
+          })
+          .catch((err: unknown) => {
+            console.warn(
+              "[auth.jwt] refresh DB lookup failed, keeping stale token:",
+              err instanceof Error ? err.message : err
+            );
+            return null;
+          });
+        if (!dbUser && shouldRefresh) {
+          // If we couldn't refresh and we already had a token, return it
+          // unchanged so existing sessions remain valid.
+          if (token.modules) return token;
+        }
 
         if (dbUser) {
           token.userId = dbUser.id;
@@ -263,19 +287,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           if (dbUser.hrProfile) {
             token.hrProfileId = dbUser.hrProfile.id;
             const explicitRoles = dbUser.hrProfile.roles.map((r) => r.role.name);
-            // Org-chart-derived team-lead: anyone with subordinates is a team
-            // lead. We inject the "team_lead" role into the session so existing
-            // permission checks (`roles.includes("team_lead")`) keep working
-            // without each call site needing to be rewritten.
-            const empWithReports = await db.hrEmployee.findFirst({
-              where: { userId: dbUser.id },
-              select: {
-                id: true,
-                subordinates: { take: 1, select: { id: true } },
-              },
-            });
+            // Org-chart-derived team-lead: anyone with subordinates picks up
+            // the team_lead role at session time so existing permission
+            // checks (`roles.includes("team_lead")`) keep working without
+            // every call site needing to be rewritten. The boolean comes
+            // free with the dbUser query above — no extra round-trip.
             const derivedLead =
-              !!empWithReports?.subordinates?.length && !explicitRoles.includes("team_lead");
+              !!dbUser.hrEmployee?.subordinates?.length &&
+              !explicitRoles.includes("team_lead");
             token.hrRoles = derivedLead
               ? [...explicitRoles, "team_lead"]
               : explicitRoles;

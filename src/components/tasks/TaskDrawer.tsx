@@ -451,6 +451,12 @@ export function TaskDrawer({
           <SheetTitle className="text-base font-semibold truncate">
             {task?.title ?? "Task"}
           </SheetTitle>
+          {task && me && task.createdById !== me && (
+            <p className="text-xs text-muted-foreground">
+              Assigned by {task.createdBy?.name ?? task.createdBy?.email ?? "someone above you"} —
+              you can Start, End, add comments and attach files. Edit is restricted to the creator.
+            </p>
+          )}
         </SheetHeader>
 
         {loading || !task ? (
@@ -458,8 +464,45 @@ export function TaskDrawer({
             <Loader2 className="h-4 w-4 animate-spin me-2" />
             Loading...
           </div>
-        ) : (
+        ) : (() => {
+          // Permission lattice for this drawer. Matches the server-side rule
+          // in /api/tasks/[id]/route.ts so the UI never offers a control the
+          // backend would 403. `canEdit` ⇒ everything (title, due date, ...);
+          // `canAct` ⇒ just status (Start/End) + comments + attachments.
+          const isCreator = !!me && task.createdById === me;
+          const isAssignee = !!me && task.assigneeId === me;
+          const canEdit = isCreator;
+          const canAct = isCreator || isAssignee;
+          return (
           <div className="p-6 space-y-6">
+            {/* Start / End action band — always visible to the assignee (and
+                creator); the only controls a non-creator gets to operate. */}
+            {canAct && task.status !== "DONE" && task.status !== "CANCELLED" && (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/40 border border-border">
+                <span className="text-xs text-muted-foreground me-auto">
+                  {task.status === "TODO" ? "Ready to begin?" : "Working on it?"}
+                </span>
+                {task.status === "TODO" && (
+                  <Button
+                    size="sm"
+                    onClick={() => patch({ status: "IN_PROGRESS" }, "status")}
+                    disabled={savingField === "status"}
+                  >
+                    <Play className="h-4 w-4 me-1" /> Start
+                  </Button>
+                )}
+                {task.status === "IN_PROGRESS" && (
+                  <Button
+                    size="sm"
+                    onClick={() => patch({ status: "DONE" }, "status")}
+                    disabled={savingField === "status"}
+                  >
+                    <Square className="h-4 w-4 me-1" /> End (mark done)
+                  </Button>
+                )}
+              </div>
+            )}
+
             {/* Title + description */}
             <div className="space-y-3">
               <div>
@@ -467,11 +510,14 @@ export function TaskDrawer({
                 <Input
                   id="td-title"
                   defaultValue={task.title}
+                  readOnly={!canEdit}
                   onBlur={(e) => {
+                    if (!canEdit) return;
                     const v = e.target.value.trim();
                     if (v && v !== task.title) patch({ title: v }, "title");
                   }}
                   disabled={savingField === "title"}
+                  title={canEdit ? undefined : "Only the task creator can edit this field"}
                 />
               </div>
               <div>
@@ -480,27 +526,36 @@ export function TaskDrawer({
                   id="td-desc"
                   rows={3}
                   defaultValue={task.description}
+                  readOnly={!canEdit}
                   onBlur={(e) => {
+                    if (!canEdit) return;
                     const v = e.target.value;
                     if (v !== task.description) patch({ description: v }, "description");
                   }}
                   disabled={savingField === "description"}
+                  title={canEdit ? undefined : "Only the task creator can edit this field"}
                 />
               </div>
             </div>
 
-            {/* Meta grid */}
+            {/* Meta grid — assignees can flip status (Start/End) via the action
+                band above; the rest of these fields are creator-only. The
+                Status select is still rendered so an assignee can see the
+                current value, but disabled when they can't change it. */}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs">Status</Label>
                 <Select
                   value={task.status}
                   onValueChange={(v) => patch({ status: v }, "status")}
-                  disabled={savingField === "status"}
+                  disabled={savingField === "status" || (!canEdit && !canAct)}
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {(["TODO", "IN_PROGRESS", "DONE", "CANCELLED"] as const).map((s) => (
+                    {(canEdit
+                      ? (["TODO", "IN_PROGRESS", "DONE", "CANCELLED"] as const)
+                      : (["TODO", "IN_PROGRESS", "DONE"] as const)
+                    ).map((s) => (
                       <SelectItem key={s} value={s}>{s.replace("_", " ")}</SelectItem>
                     ))}
                   </SelectContent>
@@ -511,7 +566,7 @@ export function TaskDrawer({
                 <Select
                   value={task.priority}
                   onValueChange={(v) => patch({ priority: v }, "priority")}
-                  disabled={savingField === "priority"}
+                  disabled={savingField === "priority" || !canEdit}
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -524,7 +579,7 @@ export function TaskDrawer({
                 <Select
                   value={task.type}
                   onValueChange={(v) => patch({ type: v }, "type")}
-                  disabled={savingField === "type"}
+                  disabled={savingField === "type" || !canEdit}
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -537,11 +592,14 @@ export function TaskDrawer({
                 <Input
                   type="date"
                   defaultValue={task.dueAt ? task.dueAt.split("T")[0] : ""}
+                  readOnly={!canEdit}
                   onBlur={(e) => {
+                    if (!canEdit) return;
                     const v = e.target.value;
                     const newIso = v ? new Date(`${v}T17:00:00`).toISOString() : null;
                     if (newIso !== task.dueAt) patch({ dueAt: newIso }, "dueAt");
                   }}
+                  title={canEdit ? undefined : "Only the task creator can edit this field"}
                 />
               </div>
             </div>
@@ -579,6 +637,7 @@ export function TaskDrawer({
               <Select
                 value={task.assigneeId}
                 onValueChange={(v) => {
+                  if (!canEdit) return;
                   if (v !== task.assigneeId) {
                     const note = window.prompt("Optional delegation note:");
                     patch(
@@ -587,7 +646,7 @@ export function TaskDrawer({
                     );
                   }
                 }}
-                disabled={savingField === "assignee"}
+                disabled={savingField === "assignee" || !canEdit}
               >
                 <SelectTrigger><SelectValue placeholder="Select user" /></SelectTrigger>
                 <SelectContent>
@@ -936,25 +995,157 @@ export function TaskDrawer({
 
             <Separator />
 
-            {/* Footer actions */}
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="outline"
-                onClick={async () => {
-                  if (!confirm("Delete this task?")) return;
-                  await fetch(`/api/tasks/${task.id}`, { method: "DELETE" });
-                  toast.success("Task deleted");
-                  onChanged?.();
-                  onOpenChange(false);
-                }}
-              >
-                <Trash2 className="h-4 w-4 me-1.5" />
-                Delete
-              </Button>
-            </div>
+            {/* Attachments — anyone with task access can upload. Files
+                persist for the task lifetime so downstream workflow steps
+                see the artifacts upstream produced. */}
+            <TaskAttachments taskId={task.id} />
+
+            <Separator />
+
+            {/* Footer actions — Delete is creator-only (server enforces too). */}
+            {canEdit && (
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    if (!confirm("Delete this task?")) return;
+                    const r = await fetch(`/api/tasks/${task.id}`, { method: "DELETE" });
+                    if (!r.ok) {
+                      const data = await r.json().catch(() => ({}));
+                      toast.error(data.error ?? "Delete failed");
+                      return;
+                    }
+                    toast.success("Task deleted");
+                    onChanged?.();
+                    onOpenChange(false);
+                  }}
+                >
+                  <Trash2 className="h-4 w-4 me-1.5" />
+                  Delete
+                </Button>
+              </div>
+            )}
           </div>
-        )}
+          );
+        })()}
       </SheetContent>
     </Sheet>
+  );
+}
+
+/**
+ * Attachments panel for a task — list + upload (creator/assignee/watcher
+ * all welcome). The API enforces task access; this UI just hides the
+ * upload button if the file payload is too big.
+ */
+function TaskAttachments({ taskId }: { taskId: string }) {
+  type Attachment = {
+    id: string;
+    filename: string;
+    mimeType: string;
+    sizeBytes: number;
+    url: string;
+    createdAt: string;
+    uploadedBy: { id: string; name: string | null; email: string };
+  };
+  const [items, setItems] = useState<Attachment[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const refresh = useCallback(async () => {
+    const r = await fetch(`/api/tasks/${taskId}/attachments`);
+    if (r.ok) {
+      const d = await r.json();
+      setItems(d.attachments ?? []);
+    }
+  }, [taskId]);
+  useEffect(() => { refresh(); }, [refresh]);
+
+  async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // reset so re-picking the same file works
+    if (!file) return;
+    if (file.size > 25 * 1024 * 1024) {
+      toast.error("File exceeds 25 MB cap");
+      return;
+    }
+    setUploading(true);
+    try {
+      const contentBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result as string;
+          // strip data URL prefix
+          resolve(result.includes(",") ? result.split(",", 2)[1] : result);
+        };
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+      const r = await fetch(`/api/tasks/${taskId}/attachments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: file.name,
+          mimeType: file.type || "application/octet-stream",
+          sizeBytes: file.size,
+          contentBase64,
+        }),
+      });
+      if (!r.ok) {
+        const data = await r.json().catch(() => ({}));
+        toast.error(data.error ?? "Upload failed");
+        return;
+      }
+      toast.success(`Attached ${file.name}`);
+      await refresh();
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function formatSize(bytes: number) {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+          Attachments ({items.length})
+        </Label>
+        <label className="cursor-pointer">
+          <input type="file" className="hidden" onChange={onPick} disabled={uploading} />
+          <span className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2.5 h-8 text-xs hover:bg-muted/50">
+            {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+            {uploading ? "Uploading..." : "Attach file"}
+          </span>
+        </label>
+      </div>
+      {items.length === 0 ? (
+        <p className="text-xs text-muted-foreground italic">No files attached yet.</p>
+      ) : (
+        <div className="space-y-1.5">
+          {items.map((a) => (
+            <a
+              key={a.id}
+              href={a.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 hover:bg-muted/30 text-sm"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="font-medium truncate">{a.filename}</p>
+                <p className="text-[11px] text-muted-foreground truncate">
+                  {a.uploadedBy.name ?? a.uploadedBy.email} · {formatSize(a.sizeBytes)} · {new Date(a.createdAt).toLocaleString()}
+                </p>
+              </div>
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground shrink-0">
+                {a.mimeType.split("/")[1] ?? a.mimeType}
+              </span>
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

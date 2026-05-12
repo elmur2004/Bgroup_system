@@ -90,6 +90,7 @@ model User {
   assignedTasks  Task[]              @relation("TaskAssignee")
   createdTasks   Task[]              @relation("TaskCreator")
   taskComments   TaskComment[]       @relation("TaskCommentAuthor")
+  taskAttachments TaskAttachment[]   @relation("TaskAttachmentUploader")
   taskWatching   TaskWatcher[]       @relation("TaskWatcher")
   taskTimeEntries TaskTimeEntry[]    @relation("TaskTimeEntry")
 
@@ -524,6 +525,7 @@ model Task {
   comments     TaskComment[]
   watchers     TaskWatcher[]
   timeEntries  TaskTimeEntry[]
+  attachments  TaskAttachment[]
   dependsOn    TaskDependency[] @relation("TaskDependent")
   blocksOthers TaskDependency[] @relation("TaskBlocker")
   sequentialRunStep SequentialWorkflowRunStep?
@@ -643,6 +645,14 @@ model SequentialWorkflow {
   /// Module this workflow belongs to — drives visibility + default task module.
   module      String   @default("general")
   isActive    Boolean  @default(true)
+  /// Reusable templates (default) can be triggered any number of times. CUSTOM
+  /// one-shot workflows execute exactly once and aren't surfaced in the
+  /// template picker after that run completes. Step timing for CUSTOM is given
+  /// as absolute `deadlineAt` per step, not relative `budgetHours`.
+  kind        SequentialWorkflowKind @default(TEMPLATE)
+  /// CUSTOM workflows store the user who owns the run; once consumed, the
+  /// workflow is auto-archived.
+  consumedAt  DateTime?
   createdById String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -651,6 +661,13 @@ model SequentialWorkflow {
   runs  SequentialWorkflowRun[]
 
   @@map("sequential_workflows")
+}
+
+enum SequentialWorkflowKind {
+  /// Reusable, triggered any number of times. Step duration = budgetHours.
+  TEMPLATE
+  /// One-shot. Step duration = absolute deadlineAt. Archived after the run.
+  CUSTOM
 }
 
 model SequentialWorkflowStep {
@@ -668,9 +685,14 @@ model SequentialWorkflowStep {
   /// Optional fallback role for assignment (e.g. role-based routing). Free
   /// text matched against the user's flat set of roles.
   assigneeRole   String?
-  /// Hours of budget. SLA evaluation uses this on task completion.
+  /// Hours of budget for TEMPLATE workflows. SLA evaluation uses this on
+  /// task completion. Ignored for CUSTOM workflows (which use deadlineAt).
   budgetHours    Float              @default(8)
-  /// If true, breaching the budget creates an HR incident.
+  /// Absolute deadline for CUSTOM workflows ("the task must be done by
+  /// Friday 23:59"). Null for TEMPLATE. Resolved into the spawned task's
+  /// dueAt at run time.
+  deadlineAt     DateTime?
+  /// If true, breaching the budget/deadline creates an HR incident.
   slaIncidentOnLate Boolean         @default(true)
   /// If true, finishing under 50% creates an HR bonus record.
   slaBonusOnEarly   Boolean         @default(true)
@@ -754,6 +776,31 @@ model TaskComment {
   @@index([taskId])
   @@index([authorId])
   @@map("task_comments")
+}
+
+/// File attached to a task. Anyone with task access (creator, assignee,
+/// watcher, platform admin) can attach. Attachments persist through workflow
+/// steps so downstream assignees see the upstream artifacts.
+model TaskAttachment {
+  id          String   @id @default(cuid())
+  taskId      String
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  uploadedById String
+  uploadedBy  User     @relation("TaskAttachmentUploader", fields: [uploadedById], references: [id], onDelete: Cascade)
+  /// Display name as shown in the UI; not necessarily the on-disk name.
+  filename    String
+  /// MIME type (e.g. application/pdf). Kept generic; we don't restrict by type.
+  mimeType    String
+  /// Bytes. Used for display + a soft cap enforced at the API.
+  sizeBytes   Int
+  /// Storage URL or relative path; resolution depends on the storage backend.
+  /// For the current in-repo MVP, a relative path under /public/uploads/tasks/.
+  url         String
+  createdAt   DateTime @default(now())
+
+  @@index([taskId])
+  @@index([uploadedById])
+  @@map("task_attachments")
 }
 
 // ============================================================================

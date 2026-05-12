@@ -356,6 +356,65 @@ export default function DashboardPage() {
         breadcrumbs={[{ label: 'Dashboard' }]}
       />
 
+      {/* ── HR Manager Action Queue ──
+          One-glance "what's waiting on me" — pending overtime, incidents
+          pending approval, contract / probation events. Deep-links to each
+          approval surface so the manager can clear the queue without
+          hunting through menus. */}
+      <Card className="border-amber-200 bg-amber-50/40">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <ShieldAlert className="h-4 w-4 text-amber-600" />
+            Action queue
+            <span className="text-xs font-normal text-muted-foreground ml-1">items waiting on you</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <button
+              onClick={() => router.push('/hr/overtime/pending')}
+              className="text-left rounded-lg bg-card border border-amber-200 hover:border-amber-400 transition-colors p-3 group"
+            >
+              <p className="text-[11px] uppercase tracking-wider text-amber-700 font-semibold mb-1">Overtime</p>
+              <p className="text-2xl font-bold text-foreground group-hover:text-amber-700 transition-colors">
+                {metricsQuery.isLoading ? '…' : (metrics?.pending_overtime ?? 0)}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">Pending approval</p>
+            </button>
+            <button
+              onClick={() => router.push('/hr/incidents/all?status=pending')}
+              className="text-left rounded-lg bg-card border border-amber-200 hover:border-amber-400 transition-colors p-3 group"
+            >
+              <p className="text-[11px] uppercase tracking-wider text-amber-700 font-semibold mb-1">Incidents</p>
+              <p className="text-2xl font-bold text-foreground group-hover:text-amber-700 transition-colors">
+                {incidentsQuery.isLoading ? '…' : incidents.filter((i) => (i as { status?: string }).status === 'pending').length}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">Awaiting decision</p>
+            </button>
+            <button
+              onClick={() => router.push('/hr/employees?filter=probation_ending_30d')}
+              className="text-left rounded-lg bg-card border border-amber-200 hover:border-amber-400 transition-colors p-3 group"
+            >
+              <p className="text-[11px] uppercase tracking-wider text-amber-700 font-semibold mb-1">Probation</p>
+              <p className="text-2xl font-bold text-foreground group-hover:text-amber-700 transition-colors">
+                {alertsQuery.isLoading ? '…' : alerts.filter((a) => a.type === 'probation_end').length}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">Ending soon</p>
+            </button>
+            <button
+              onClick={() => router.push('/hr/employees?filter=contract_expiring_30d')}
+              className="text-left rounded-lg bg-card border border-amber-200 hover:border-amber-400 transition-colors p-3 group"
+            >
+              <p className="text-[11px] uppercase tracking-wider text-amber-700 font-semibold mb-1">Contracts</p>
+              <p className="text-2xl font-bold text-foreground group-hover:text-amber-700 transition-colors">
+                {alertsQuery.isLoading ? '…' : alerts.filter((a) => a.type === 'contract_expiry').length}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">Expiring &lt;30d</p>
+            </button>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* ── Stat Cards ── */}
       <div data-demo-id="dashboard-stats" className={`grid grid-cols-1 sm:grid-cols-2 ${isSuperAdmin ? 'xl:grid-cols-5' : 'xl:grid-cols-4'} gap-4`}>
         <StatCard
@@ -365,6 +424,7 @@ export default function DashboardPage() {
           icon={<Users className="h-6 w-6" />}
           color="navy"
           loading={metricsQuery.isLoading}
+          href="/hr/employees"
         />
         <StatCard
           label="Attendance Rate"
@@ -373,6 +433,7 @@ export default function DashboardPage() {
           icon={<Clock className="h-6 w-6" />}
           color="emerald"
           loading={attendanceQuery.isLoading}
+          href="/hr/attendance/today"
         />
         <StatCard
           label="Pending Overtime"
@@ -381,6 +442,7 @@ export default function DashboardPage() {
           icon={<TrendingUp className="h-6 w-6" />}
           color="amber"
           loading={metricsQuery.isLoading}
+          href="/hr/overtime/pending"
         />
         <StatCard
           label="Monthly Salary Budget"
@@ -389,6 +451,7 @@ export default function DashboardPage() {
           icon={<DollarSign className="h-6 w-6" />}
           color="blue"
           loading={metricsQuery.isLoading}
+          href="/hr/payroll/monthly"
         />
         {isSuperAdmin && (
           <StatCard
@@ -402,6 +465,7 @@ export default function DashboardPage() {
             icon={<DollarSign className="h-6 w-6" />}
             color="emerald"
             loading={payrollSummaryQuery.isLoading}
+            href="/hr/accountant"
           />
         )}
       </div>

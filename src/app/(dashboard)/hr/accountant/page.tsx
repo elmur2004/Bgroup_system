@@ -85,6 +85,38 @@ export default function AccountantPage() {
 
   const summaries = summaryQuery.data || []
 
+  // Commission liability for the selected period: total commissions accrued
+  // by every sales rep, so the accountant can size the payable line before
+  // locking payroll. Sales reps are employees with a CrmUserProfile — their
+  // commission is computed off CrmOpportunity.WON in this window.
+  type CommissionsPayable = {
+    period: { month: number; year: number }
+    commissionRate: number
+    totals: { reps: number; dealCount: number; wonValueEGP: number; commissionEGP: number }
+    perRep: Array<{
+      repId: string
+      repName: string
+      repEmail: string | null
+      userId: string | null
+      dealCount: number
+      wonValueEGP: number
+      commissionEGP: number
+    }>
+  }
+  const commissionsQuery = useQuery<CommissionsPayable>({
+    queryKey: ['commissions-payable', month, year],
+    queryFn: async () => {
+      const r = await fetch(`/api/crm/commissions-payable?month=${month}&year=${year}`, {
+        credentials: 'include',
+      })
+      if (!r.ok) {
+        return { period: { month: Number(month), year: Number(year) }, commissionRate: 0.05, totals: { reps: 0, dealCount: 0, wonValueEGP: 0, commissionEGP: 0 }, perRep: [] }
+      }
+      return r.json()
+    },
+  })
+  const commissions = commissionsQuery.data
+
   const markPaidMutation = useMutation({
     mutationFn: (companyId: number) =>
       api.post('/payroll/monthly/mark-paid/', { company: companyId, month: Number(month), year: Number(year) }),
@@ -204,6 +236,7 @@ export default function AccountantPage() {
           color="navy"
           loading={summaryQuery.isLoading}
           className="col-span-1"
+          href="/hr/employees"
         />
         <StatCard
           label="Base Salary"
@@ -212,6 +245,7 @@ export default function AccountantPage() {
           color="blue"
           loading={summaryQuery.isLoading}
           compact
+          href="/hr/payroll/monthly"
         />
         <StatCard
           label="Overtime"
@@ -220,6 +254,7 @@ export default function AccountantPage() {
           color="amber"
           loading={summaryQuery.isLoading}
           compact
+          href="/hr/overtime/report"
         />
         <StatCard
           label="Bonuses"
@@ -228,6 +263,7 @@ export default function AccountantPage() {
           color="emerald"
           loading={summaryQuery.isLoading}
           compact
+          href="/hr/bonuses/all"
         />
         <StatCard
           label="Deductions"
@@ -236,6 +272,7 @@ export default function AccountantPage() {
           color="red"
           loading={summaryQuery.isLoading}
           compact
+          href="/hr/incidents/all"
         />
         <StatCard
           label="Net Payroll"
@@ -244,8 +281,71 @@ export default function AccountantPage() {
           color="navy"
           loading={summaryQuery.isLoading}
           compact
+          href="/hr/payroll/monthly"
         />
       </div>
+
+      {/* Commissions Payable — sales reps' commission liability for this
+          window. Not yet rolled into the payroll calculation; here so the
+          accountant can size it before finalising. */}
+      {commissions && commissions.totals.reps > 0 && (
+        <Card className="border-emerald-200 bg-emerald-50/40">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center justify-between text-base">
+              <span className="flex items-center gap-2">
+                <Calculator className="h-4 w-4 text-emerald-600" />
+                Sales commissions payable — {periodLabel}
+              </span>
+              <Badge variant="info" className="text-[10px] tracking-widest uppercase">
+                {(commissions.commissionRate * 100).toFixed(0)}% of deal value
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+              <div>
+                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Reps</p>
+                <p className="text-xl font-bold text-foreground">{commissions.totals.reps}</p>
+              </div>
+              <div>
+                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Deals won</p>
+                <p className="text-xl font-bold text-foreground">{commissions.totals.dealCount}</p>
+              </div>
+              <div>
+                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Deal value</p>
+                <p className="text-xl font-bold text-foreground">{formatCurrency(commissions.totals.wonValueEGP)}</p>
+              </div>
+              <div>
+                <p className="text-[11px] uppercase tracking-wider text-emerald-700">Commission liability</p>
+                <p className="text-xl font-bold text-emerald-700">{formatCurrency(commissions.totals.commissionEGP)}</p>
+              </div>
+            </div>
+            {commissions.perRep.length > 0 && (
+              <div className="overflow-x-auto -mx-6 px-6">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-emerald-200">
+                      {['Sales rep', 'Deals', 'Deal value', 'Commission'].map((h) => (
+                        <th key={h} className="px-2 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-emerald-100">
+                    {commissions.perRep.map((r) => (
+                      <tr key={r.repId}>
+                        <td className="px-2 py-2 font-medium">{r.repName} <span className="text-xs text-muted-foreground">· {r.repEmail ?? '—'}</span></td>
+                        <td className="px-2 py-2">{r.dealCount}</td>
+                        <td className="px-2 py-2">{formatCurrency(r.wonValueEGP)}</td>
+                        <td className="px-2 py-2 font-semibold text-emerald-700">{formatCurrency(r.commissionEGP)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Chart */}
       <Card>

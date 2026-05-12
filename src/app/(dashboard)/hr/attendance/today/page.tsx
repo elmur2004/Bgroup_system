@@ -111,14 +111,20 @@ export default function TodayAttendancePage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [manualEntryOpen, setManualEntryOpen] = useState(false)
   const [selectedLog, setSelectedLog] = useState<TodayLog | null>(null)
+  // Day filter — defaults to today. The page is named "Today's Attendance"
+  // but it lets the manager pick any past day for review without leaving.
+  const todayIso = new Date().toISOString().split('T')[0]
+  const [selectedDate, setSelectedDate] = useState(todayIso)
+  const isToday = selectedDate === todayIso
 
   const { data, isLoading, refetch, isFetching } = useQuery<TodayResponse>({
-    queryKey: ['attendance', 'today'],
+    queryKey: ['attendance', 'today', selectedDate],
     queryFn: async () => {
-      const res = await api.get('/attendance/today/')
+      const res = await api.get('/attendance/today/', { params: { date: selectedDate } })
       return res.data
     },
-    refetchInterval: 60_000,
+    // Only auto-refresh when viewing today — older days don't change.
+    refetchInterval: isToday ? 60_000 : false,
   })
 
   const { register, handleSubmit, reset, setValue, formState: { errors, isSubmitting } } = useForm<ManualEntryForm>({
@@ -170,9 +176,13 @@ export default function TodayAttendancePage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Today's Attendance"
-        description={`Live attendance for ${formatDate(new Date().toISOString(), 'EEEE, dd MMMM yyyy')}`}
-        breadcrumbs={[{ label: 'Attendance' }, { label: "Today's Live" }]}
+        title={isToday ? "Today's Attendance" : "Attendance"}
+        description={
+          isToday
+            ? `Live attendance for ${formatDate(new Date().toISOString(), 'EEEE, dd MMMM yyyy')}`
+            : `Attendance on ${formatDate(`${selectedDate}T00:00:00`, 'EEEE, dd MMMM yyyy')} (historical)`
+        }
+        breadcrumbs={[{ label: 'Attendance' }, { label: isToday ? "Today's Live" : 'Day view' }]}
         actions={
           <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching} className="gap-2">
             <RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} />
@@ -200,6 +210,28 @@ export default function TodayAttendancePage() {
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-center bg-card p-4 rounded-lg border border-border">
+        <div className="flex items-center gap-2">
+          <Label htmlFor="att-date" className="text-xs text-muted-foreground uppercase tracking-wide">Date</Label>
+          <Input
+            id="att-date"
+            type="date"
+            value={selectedDate}
+            max={todayIso}
+            onChange={(e) => setSelectedDate(e.target.value || todayIso)}
+            className="w-40"
+          />
+          {!isToday && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setSelectedDate(todayIso)}
+              className="text-xs"
+            >
+              Jump to today
+            </Button>
+          )}
+        </div>
+
         <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
           <SelectTrigger className="w-48">
             <SelectValue placeholder="All Departments" />

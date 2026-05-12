@@ -139,11 +139,11 @@ function getHrNav(roles: string[]): NavSection[] {
     sections.push({
       items: [
         { href: "/hr/employee/home", label: "Home", icon: LayoutDashboard },
+        { href: "/hr/employee/tasks", label: "My Tasks", icon: ListTodo },
         { href: "/hr/employee/attendance", label: "My Attendance", icon: Clock },
         { href: "/hr/employee/overtime", label: "My Overtime", icon: Timer },
         { href: "/hr/employee/salary", label: "My Salary", icon: Wallet },
         { href: "/hr/employee/incidents", label: "My Incidents", icon: AlertTriangle },
-        { href: "/tasks", label: "My Tasks", icon: ListTodo },
         { href: "/hr/employee/profile", label: "Profile", icon: UserCog },
       ],
     });

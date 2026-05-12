@@ -3,7 +3,7 @@
 import React from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
-import { Eye, AlertTriangle, Clock, Loader2 } from 'lucide-react'
+import { Eye, AlertTriangle, Clock, Loader2, CheckSquare, CalendarOff, Users as UsersIcon, TrendingUp } from 'lucide-react'
 import { PageHeader } from '@/components/hr/shared/PageHeader'
 import { Button } from '@/components/hr/ui/button'
 import { Avatar, AvatarFallback } from '@/components/hr/ui/avatar'
@@ -86,13 +86,84 @@ export default function TeamPage() {
     )
   }
 
+  // Compute roll-up stats for the team-lead landing experience: a one-glance
+  // read of how the reporting tree is doing today.
+  const totalReports = teamMembers.length
+  const presentToday = teamMembers.filter((m) => {
+    const s = getAttendanceStatus(m.id)
+    return s === 'on_time' || s === 'late'
+  }).length
+  const onLeaveToday = teamMembers.filter((m) => getAttendanceStatus(m.id) === 'leave').length
+  const absentToday = teamMembers.filter((m) => getAttendanceStatus(m.id) === 'absent').length
+  const onProbation = teamMembers.filter((m) => m.status === 'probation').length
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="My Team"
-        description={`${teamMembers.length} team member${teamMembers.length !== 1 ? 's' : ''}`}
+        description={`${teamMembers.length} ${teamMembers.length === 1 ? 'person reports' : 'people report'} to you (org-chart derived)`}
         breadcrumbs={[{ label: 'Team' }]}
+        actions={
+          totalReports > 0 ? (
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={() => router.push('/hr/team/attendance')}>
+                <Clock className="h-3.5 w-3.5 me-1" /> Today's attendance
+              </Button>
+              <Button size="sm" onClick={() => router.push('/hr/overtime/pending')}>
+                <CheckSquare className="h-3.5 w-3.5 me-1" /> Pending approvals
+              </Button>
+            </div>
+          ) : null
+        }
       />
+
+      {/* Team-lead roll-up: instant read of how the reports are doing today. */}
+      {totalReports > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="bg-card rounded-lg border border-border p-4">
+            <div className="flex items-center gap-2 mb-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+              <UsersIcon className="h-3.5 w-3.5" /> Reports
+            </div>
+            <p className="text-2xl font-bold text-foreground">{totalReports}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {onProbation > 0 ? `${onProbation} on probation` : 'All confirmed'}
+            </p>
+          </div>
+          <div className="bg-emerald-50 rounded-lg border border-emerald-200 p-4">
+            <div className="flex items-center gap-2 mb-1.5 text-xs font-semibold text-emerald-700 uppercase tracking-wide">
+              <CheckSquare className="h-3.5 w-3.5" /> Present
+            </div>
+            <p className="text-2xl font-bold text-emerald-700">{presentToday}</p>
+            <p className="text-xs text-emerald-600/70 mt-0.5">
+              {totalReports > 0 ? `${Math.round((presentToday / totalReports) * 100)}%` : '—'} of team
+            </p>
+          </div>
+          <div className="bg-blue-50 rounded-lg border border-blue-200 p-4">
+            <div className="flex items-center gap-2 mb-1.5 text-xs font-semibold text-blue-700 uppercase tracking-wide">
+              <CalendarOff className="h-3.5 w-3.5" /> On leave
+            </div>
+            <p className="text-2xl font-bold text-blue-700">{onLeaveToday}</p>
+            <p className="text-xs text-blue-600/70 mt-0.5">today</p>
+          </div>
+          <div className={cn(
+            "rounded-lg border p-4",
+            absentToday > 0 ? "bg-red-50 border-red-200" : "bg-card border-border"
+          )}>
+            <div className={cn(
+              "flex items-center gap-2 mb-1.5 text-xs font-semibold uppercase tracking-wide",
+              absentToday > 0 ? "text-red-700" : "text-muted-foreground"
+            )}>
+              <AlertTriangle className="h-3.5 w-3.5" /> Absent
+            </div>
+            <p className={cn("text-2xl font-bold", absentToday > 0 ? "text-red-700" : "text-foreground")}>
+              {absentToday}
+            </p>
+            <p className={cn("text-xs mt-0.5", absentToday > 0 ? "text-red-600/70" : "text-muted-foreground")}>
+              unexcused today
+            </p>
+          </div>
+        </div>
+      )}
 
       {teamMembers.length === 0 && (
         <div className="bg-card rounded-lg border border-border p-12 text-center text-muted-foreground">

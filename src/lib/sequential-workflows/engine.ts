@@ -68,6 +68,17 @@ export async function spawnStepTask(
   const taskType = step.taskType as "GENERAL" | "CALL" | "EMAIL" | "MEETING" | "FOLLOW_UP" | "ADMIN" | "ONBOARDING" | "REVIEW" | "APPROVAL";
   const taskPriority = step.taskPriority as "LOW" | "MEDIUM" | "HIGH" | "URGENT";
 
+  // Due-date model differs by workflow kind:
+  //   TEMPLATE → relative budget (now + budgetHours)
+  //   CUSTOM   → absolute deadlineAt from the step (the user picked a
+  //              calendar date+time when authoring this one-shot workflow).
+  // If a CUSTOM step is missing its deadline (shouldn't happen with proper
+  // form validation, but defend against it) we fall back to the relative
+  // budget so a task still has a sensible dueAt.
+  const dueAt = step.deadlineAt
+    ? new Date(step.deadlineAt)
+    : new Date(Date.now() + step.budgetHours * 3600_000);
+
   const task = await db.task.create({
     data: {
       title: step.taskTitle,
@@ -80,9 +91,7 @@ export async function spawnStepTask(
       createdById: run.triggeredById,
       entityType: (ctx.entityType ?? null) as null,
       entityId: ctx.entityId ?? null,
-      // Task budget shows up via the linked run-step; leave dueAt computed
-      // from the budget so the task surfaces in the calendar/today views.
-      dueAt: new Date(Date.now() + step.budgetHours * 3600_000),
+      dueAt,
     },
     select: { id: true },
   });
@@ -176,11 +185,33 @@ export async function advanceRunOnTaskDone(taskId: string): Promise<AdvanceResul
   const startedAt = runStep.startedAt ?? runStep.createdAt;
   const completedAt = new Date();
   const durationMinutes = Math.max(1, Math.round((completedAt.getTime() - startedAt.getTime()) / 60_000));
-  const budgetMinutes = Math.max(1, Math.round(runStep.step.budgetHours * 60));
 
+  // Budget semantics depend on workflow kind:
+  //   TEMPLATE → budgetHours (relative). The step took at most budgetHours.
+  //   CUSTOM   → deadlineAt   (absolute). Late if completed past the deadline,
+  //              "early bonus" if completed at least 50% of the available
+  //              window before the deadline. budgetMinutes for the report
+  //              is the original window from createdAt → deadlineAt.
+  const kind = runStep.run.workflow.kind ?? "TEMPLATE";
+  let budgetMinutes: number;
   let sla: SequentialStepSlaResult = "ON_TIME";
-  if (durationMinutes > budgetMinutes) sla = "LATE";
-  else if (durationMinutes < budgetMinutes / 2) sla = "EARLY_BONUS";
+
+  if (kind === "CUSTOM" && runStep.step.deadlineAt) {
+    const deadline = new Date(runStep.step.deadlineAt);
+    const windowFrom = runStep.createdAt;
+    budgetMinutes = Math.max(
+      1,
+      Math.round((deadline.getTime() - windowFrom.getTime()) / 60_000)
+    );
+    if (completedAt > deadline) sla = "LATE";
+    else if (deadline.getTime() - completedAt.getTime() >= (deadline.getTime() - windowFrom.getTime()) / 2) {
+      sla = "EARLY_BONUS";
+    }
+  } else {
+    budgetMinutes = Math.max(1, Math.round(runStep.step.budgetHours * 60));
+    if (durationMinutes > budgetMinutes) sla = "LATE";
+    else if (durationMinutes < budgetMinutes / 2) sla = "EARLY_BONUS";
+  }
 
   await db.sequentialWorkflowRunStep.update({
     where: { id: runStep.id },
@@ -242,6 +273,15 @@ export async function advanceRunOnTaskDone(taskId: string): Promise<AdvanceResul
       data: { status: "COMPLETED", completedAt: new Date() },
     });
     runCompleted = true;
+    // One-shot CUSTOM workflows auto-archive when the run finishes — they
+    // were never intended to be re-triggered. Deactivating the workflow
+    // hides it from the template picker.
+    if (runStep.run.workflow.kind === "CUSTOM") {
+      await db.sequentialWorkflow.update({
+        where: { id: runStep.run.workflow.id },
+        data: { isActive: false, consumedAt: new Date() },
+      });
+    }
   }
 
   return { ok: true, sla, durationMinutes, budgetMinutes, nextTaskId, runCompleted };
