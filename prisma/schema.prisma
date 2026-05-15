@@ -2254,6 +2254,13 @@ model CrmColdLead {
   companyName String?
   phone       String?
   email       String?
+  /// Optional fields surfaced by the admin's customizable Excel template:
+  /// website (https://...), contactPerson (a primary contact's name when
+  /// it differs from `name`), contactPosition (their title — "CEO",
+  /// "Procurement Manager", etc). All free text and optional.
+  website         String?
+  contactPerson   String?
+  contactPosition String?
   industry    String?
   category    String?
   location    String?

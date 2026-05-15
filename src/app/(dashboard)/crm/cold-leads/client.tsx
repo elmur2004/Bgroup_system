@@ -45,6 +45,9 @@ type Lead = {
   companyName: string | null;
   phone: string | null;
   email: string | null;
+  website: string | null;
+  contactPerson: string | null;
+  contactPosition: string | null;
   industry: string | null;
   category: string | null;
   location: string | null;
@@ -486,6 +489,25 @@ export function ColdLeadsClient({
   );
 }
 
+/**
+ * Optional columns the admin can include in the downloaded template. `name`
+ * and `phone` are always present and aren't shown in the picker. Keep this
+ * list in sync with the COLUMN_LABELS map on the server (template/route.ts)
+ * and the FIELD_SYNONYMS table on the import endpoint.
+ */
+const TEMPLATE_OPTIONAL_COLUMNS: Array<{ key: string; label: string }> = [
+  { key: "companyName", label: "Company" },
+  { key: "email", label: "Email" },
+  { key: "website", label: "Website" },
+  { key: "contactPerson", label: "Contact person" },
+  { key: "contactPosition", label: "Contact position" },
+  { key: "industry", label: "Industry" },
+  { key: "category", label: "Category" },
+  { key: "location", label: "Location" },
+  { key: "source", label: "Source" },
+  { key: "notes", label: "Notes" },
+];
+
 function ImportDialog({
   open,
   onOpenChange,
@@ -499,35 +521,129 @@ function ImportDialog({
   fileRef: React.RefObject<HTMLInputElement | null>;
   onFile: (file: File) => void;
 }) {
+  // Default: keep the heavy-hitters checked so a one-click download is
+  // useful out of the box; the rare extras (website, contact position) are
+  // opt-in. The admin can adjust each time before clicking download.
+  const [selected, setSelected] = useState<Set<string>>(
+    new Set(["companyName", "email", "industry", "location", "source", "notes"])
+  );
+  const [downloading, setDownloading] = useState(false);
+
+  function toggleColumn(key: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  async function downloadTemplate(format: "xlsx" | "csv") {
+    setDownloading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("format", format);
+      params.set("columns", Array.from(selected).join(","));
+      const res = await fetch(`/api/crm/cold-leads/template?${params.toString()}`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error ?? "Couldn't download template");
+        return;
+      }
+      const blob = await res.blob();
+      const a = document.createElement("a");
+      const objUrl = URL.createObjectURL(blob);
+      a.href = objUrl;
+      a.download = `cold-leads-template.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objUrl);
+    } finally {
+      setDownloading(false);
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Import cold leads</DialogTitle>
         </DialogHeader>
-        <div className="space-y-3 text-sm">
-          <p className="text-muted-foreground">
-            Upload an <span className="font-mono">.xlsx</span> or{" "}
-            <span className="font-mono">.csv</span> with these columns (any order, case-insensitive):
-          </p>
-          <ul className="text-xs space-y-1 text-muted-foreground list-disc list-inside">
-            <li><b>name</b> or <b>company</b> — required</li>
-            <li>phone, email, industry, category, location, source, notes — optional</li>
-          </ul>
-          <p className="text-xs text-muted-foreground">
-            Duplicates (matched by phone or email) are skipped automatically. Up to 50,000 rows per upload.
-          </p>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".xlsx,.csv"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) onFile(f);
-              e.target.value = "";
-            }}
-          />
+        <div className="space-y-4 text-sm">
+          {/* Step 1 — download template */}
+          <div className="rounded-md border border-border bg-muted/20 p-3 space-y-3">
+            <div>
+              <p className="font-medium">1. Download a template</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Pick which optional columns to include. <b>Name</b> and <b>Phone</b>{" "}
+                are always present.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+              {TEMPLATE_OPTIONAL_COLUMNS.map((c) => (
+                <label
+                  key={c.key}
+                  className="flex items-center gap-2 cursor-pointer text-xs"
+                >
+                  <Checkbox
+                    checked={selected.has(c.key)}
+                    onCheckedChange={() => toggleColumn(c.key)}
+                  />
+                  <span>{c.label}</span>
+                </label>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => downloadTemplate("xlsx")}
+                disabled={downloading}
+              >
+                {downloading ? (
+                  <Loader2 className="h-3.5 w-3.5 me-1.5 animate-spin" />
+                ) : null}
+                Download .xlsx
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => downloadTemplate("csv")}
+                disabled={downloading}
+              >
+                Download .csv
+              </Button>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              The .xlsx and .csv files both round-trip cleanly through Google
+              Sheets — just upload the file, edit it there, then export back
+              and reupload below. No API setup needed.
+            </p>
+          </div>
+
+          {/* Step 2 — upload */}
+          <div className="rounded-md border border-border bg-muted/20 p-3 space-y-2">
+            <div>
+              <p className="font-medium">2. Upload your filled-in file</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Accepts <span className="font-mono">.xlsx</span> or{" "}
+                <span className="font-mono">.csv</span>. Up to 50,000 rows per upload.
+                Duplicates (by phone or email) are skipped automatically.
+              </p>
+            </div>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".xlsx,.csv"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) onFile(f);
+                e.target.value = "";
+              }}
+            />
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={importing}>
@@ -540,7 +656,7 @@ function ImportDialog({
               </>
             ) : (
               <>
-                <Upload className="h-4 w-4 me-1.5" /> Pick file
+                <Upload className="h-4 w-4 me-1.5" /> Pick file to upload
               </>
             )}
           </Button>
@@ -696,6 +812,24 @@ function DispositionDialog({
                 <p className="flex items-center gap-2">
                   <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
                   {lead.location}
+                </p>
+              )}
+              {lead.contactPerson && (
+                <p className="text-xs text-muted-foreground">
+                  Contact: <span className="font-medium text-foreground">{lead.contactPerson}</span>
+                  {lead.contactPosition ? ` · ${lead.contactPosition}` : ""}
+                </p>
+              )}
+              {lead.website && (
+                <p className="text-xs">
+                  <a
+                    href={lead.website.startsWith("http") ? lead.website : `https://${lead.website}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-primary hover:underline"
+                  >
+                    {lead.website}
+                  </a>
                 </p>
               )}
             </div>

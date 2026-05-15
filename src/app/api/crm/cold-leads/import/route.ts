@@ -34,10 +34,13 @@ import { db } from "@/lib/db";
 const MAX_ROWS = 50_000;
 
 const FIELD_SYNONYMS: Record<string, string[]> = {
-  name: ["name", "full name", "fullname", "contact", "contact name", "lead", "lead name"],
+  name: ["name", "full name", "fullname", "lead", "lead name"],
   companyName: ["company", "company name", "organization", "organisation", "account", "account name"],
   phone: ["phone", "phone number", "mobile", "whatsapp", "tel", "telephone", "number"],
   email: ["email", "e-mail", "mail"],
+  website: ["website", "url", "site", "web"],
+  contactPerson: ["contact person", "contact", "contact name", "primary contact", "decision maker"],
+  contactPosition: ["contact position", "position", "title", "role", "job title", "designation"],
   industry: ["industry", "sector", "vertical"],
   category: ["category", "segment", "tier", "type"],
   location: ["location", "city", "region", "country", "address", "area"],
@@ -146,6 +149,9 @@ export async function POST(request: Request) {
     companyName: string | null;
     phone: string | null;
     email: string | null;
+    website: string | null;
+    contactPerson: string | null;
+    contactPosition: string | null;
     industry: string | null;
     category: string | null;
     location: string | null;
@@ -165,6 +171,9 @@ export async function POST(request: Request) {
       companyName: companyName || null,
       phone: get("phone") || null,
       email: get("email") || null,
+      website: get("website") || null,
+      contactPerson: get("contactPerson") || null,
+      contactPosition: get("contactPosition") || null,
       industry: get("industry") || null,
       category: get("category") || null,
       location: get("location") || null,
